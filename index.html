@@ -75,13 +75,6 @@
    4. TESTS   : suite de tests automatiques exécutée sur le noyau.
    ================================================================ */
 
-/* Filet de sécurité : toute erreur JavaScript non interceptée est
-   affichée clairement à l'écran, au lieu d'un échec silencieux
-   (comportement par défaut du navigateur, très frustrant en test). */
-window.onerror = function (msg, src, lig) {
-  alert("Erreur interne :\n" + msg + "\nFichier/ligne : " + src + " / " + lig);
-};
-
 /* ============ 1. NOYAU : logique métier pure ============ */
 const Noyau = (() => {
 
@@ -182,18 +175,7 @@ const Noyau = (() => {
     return [entetes, ...corps].join("\n");
   }
 
-  /* Sécurité de saisie pour les instances : nom 1 à 32 caractères,
-     description 256 caractères maximum (valeurs optimisées : un nom
-     reste lisible, une description tient sur quelques lignes). */
-  function validerInstance(nom, desc) {
-    const n = (nom || "").trim(), d = (desc || "").trim();
-    if (!n) return { ok: false, erreur: "Nom d'instance obligatoire." };
-    if (n.length > 32) return { ok: false, erreur: "Le nom ne peut dépasser 32 caractères." };
-    if (d.length > 256) return { ok: false, erreur: "La description ne peut dépasser 256 caractères." };
-    return { ok: true };
-  }
-
-  return { instanceNeuve, nouvelId, validerLigne, validerInstance, ajouterLabel, modifierLabel, supprimerLabel, appliquerColle, exporterTSV };
+  return { instanceNeuve, nouvelId, validerLigne, ajouterLabel, modifierLabel, supprimerLabel, appliquerColle, exporterTSV };
 })();
 
 /* ============ 2. BD : persistance locale ============ */
@@ -203,16 +185,7 @@ const BD = (() => {
 
   function charger() {
     try { etat = JSON.parse(localStorage.getItem(CLE)) || null; } catch (e) { etat = null; }
-    if (!etat || typeof etat !== "object") etat = {};
-    /* RÉPARATION IMPORTANTE : si les données ont été sauvegardées par une
-       version antérieure de l'appli, il peut manquer des clés (ex. "donnees"
-       ou "membres"). Sans cette réparation, la création d'instance plantait
-       EN SILENCE (erreur JavaScript invisible pour l'utilisateur). */
-    if (!Array.isArray(etat.utilisateurs)) etat.utilisateurs = [];
-    if (!Array.isArray(etat.instances)) etat.instances = [];
-    if (!etat.donnees || typeof etat.donnees !== "object") etat.donnees = {};
-    if (!etat.session) etat.session = null;
-    etat.instances.forEach(i => { if (!Array.isArray(i.membres)) i.membres = []; });
+    if (!etat) etat = { utilisateurs: [], session: null, instances: [], donnees: {} };
     return etat;
   }
   function sauver() { localStorage.setItem(CLE, JSON.stringify(etat)); }
@@ -248,29 +221,39 @@ const BD = (() => {
   }
   function creerInstance(nom, desc) {
     const e = lire(); const u = utilisateurCourant(); if (!u) return { ok: false, erreur: "Non connecté." };
-    // Validation des limites de caractères AVANT toute écriture.
-    const v = Noyau.validerInstance(nom, desc);
-    if (!v.ok) return { ok: false, erreur: v.erreur };
-    const inst = { id: "i" + Date.now(), nom: nom.trim(), desc: (desc || "").trim(), proprio: u.id, membres: [] };
-    e.instances.push(inst);
-    e.donnees[inst.id] = Noyau.instanceNeuve();
-    sauver(); return { ok: true };
+    // Sécurité : bornage côté données (le maxlength HTML protège la saisie,
+    // cette vérification protège l'application elle-même).
+    nom = (nom || "").trim().slice(0, LIMITES.nomInstance);
+    desc = (desc || "").trim().slice(0, LIMITES.descInstance);
+    if (!nom) return { ok: false, erreur: "Nom d'instance obligatoire." };
+    try {
+      const inst = { id: "i" + Date.now(), nom, desc, proprio: u.id, membres: [] };
+      e.instances.push(inst);
+      e.donnees[inst.id] = Noyau.instanceNeuve();
+      sauver(); return { ok: true };
+    } catch (err) {
+      return { ok: false, erreur: "Échec de la création : " + err.message };
+    }
   }
   function dupliquerInstance(id, nouveauNom, nouvelleDesc) {
     const e = lire(); const u = utilisateurCourant(); if (!u) return { ok: false, erreur: "Non connecté." };
     const src = e.instances.find(i => i.id === id); if (!src) return { ok: false, erreur: "Instance introuvable." };
-    const v = Noyau.validerInstance(nouveauNom, nouvelleDesc);
-    if (!v.ok) return { ok: false, erreur: v.erreur };
-    const inst = { ...src, id: "i" + Date.now(), nom: nouveauNom.trim(), desc: (nouvelleDesc || "").trim(), proprio: u.id, membres: [] };
-    // Copie PROFONDE des données : la copie vit ensuite sa vie indépendamment.
-    e.instances.push(inst);
-    e.donnees[inst.id] = JSON.parse(JSON.stringify(e.donnees[id]));
-    sauver(); return { ok: true };
+    // Bornage identique à la création.
+    nouveauNom = (nouveauNom || "").trim().slice(0, LIMITES.nomInstance);
+    nouvelleDesc = (nouvelleDesc || "").trim().slice(0, LIMITES.descInstance);
+    if (!nouveauNom) return { ok: false, erreur: "Nom obligatoire." };
+    try {
+      const inst = { ...src, id: "i" + Date.now(), nom: nouveauNom, desc: nouvelleDesc, proprio: u.id, membres: [] };
+      // Copie PROFONDE des données : la copie vit ensuite sa vie indépendamment.
+      e.instances.push(inst);
+      e.donnees[inst.id] = JSON.parse(JSON.stringify(e.donnees[id]));
+      sauver(); return { ok: true };
+    } catch (err) {
+      return { ok: false, erreur: "Échec de la duplication : " + err.message };
+    }
   }
   function modifierInstance(id, nom, desc) {
     const e = lire(); const i = e.instances.find(x => x.id === id); if (!i) return { ok: false, erreur: "Introuvable." };
-    const v = Noyau.validerInstance(nom, desc);
-    if (!v.ok) return { ok: false, erreur: v.erreur };
     i.nom = nom.trim(); i.desc = (desc || "").trim(); sauver(); return { ok: true };
   }
   function supprimerInstance(id) {
@@ -308,6 +291,26 @@ function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;"
 
 /* État d'interface courant (quelle instance, quel onglet, quelles colonnes). */
 const App = { instanceOuverte: null, vue: "lignes", vueObjet: "reseaux", colonnes: null };
+
+/* ---------- Sécurité & diagnostic ----------
+   Toute erreur JavaScript non capturée s'affiche dans un bandeau rouge en
+   haut de l'écran. Indispensable pour diagnostiquer à distance (ex. sur
+   GitHub Pages ou un téléphone, sans console de développeur). */
+function afficherErreur(msg) {
+  let b = document.getElementById("bloc-erreur");
+  if (!b) {
+    b = document.createElement("div");
+    b.id = "bloc-erreur";
+    b.style.cssText = "background:#dc2626;color:#fff;padding:8px 16px;font-size:13px;position:sticky;top:0;z-index:999;";
+    document.body.prepend(b);
+  }
+  b.textContent = "⚠️ Erreur : " + msg;
+}
+window.addEventListener("error", (ev) => afficherErreur(ev.message));
+
+/* Limites de sécurité (demandées + appliquées aussi côté données,
+   car un `maxlength` HTML seul peut être contourné). */
+const LIMITES = { nomInstance: 32, descInstance: 256 };
 
 function rafraichir() {
   const app = document.getElementById("app");
@@ -368,46 +371,6 @@ function modal(contenu) {
   return fond;
 }
 
-/* Fenêtre modale COMMUNE pour créer / dupliquer / modifier une instance.
-   Sécurité de saisie en deux couches :
-   - couche 1 (confort) : maxlength bloque la frappe, un compteur affiche
-     le nombre de caractères restants (nom 32 max, description 256 max) ;
-   - couche 2 (garantie) : le noyau revalide les limites à l'enregistrement.
-   Le bouton de validation est aussi blindé : toute erreur inattendue
-   est affichée dans une alerte plutôt que d'échouer en silence. */
-function modalInstance({ titre, nom = "", desc = "", libelleBouton, classeBouton, onValider }) {
-  const form = h(`<div>
-    <h2>${esc(titre)}</h2>
-    <div class="champ"><label>Nom de l'instance (32 caractères max)</label>
-      <input id="m-nom" maxlength="32" value="${esc(nom)}"/>
-      <div class="info-txt" id="m-cpt-nom">0 / 32</div></div>
-    <div class="champ"><label>Description courte (256 caractères max)</label>
-      <textarea id="m-desc" maxlength="256" rows="2">${esc(desc)}</textarea>
-      <div class="info-txt" id="m-cpt-desc">0 / 256</div></div>
-    <div class="ligne-boutons"><button id="m-ann">Annuler</button>
-      <button id="m-ok" class="${classeBouton}">${libelleBouton}</button></div>
-  </div>`);
-  modal(form);
-  const nomInp = form.querySelector("#m-nom"), descInp = form.querySelector("#m-desc");
-  // Compteurs en temps réel : l'utilisateur voit sa marge avant même de valider.
-  const majCompteurs = () => {
-    form.querySelector("#m-cpt-nom").textContent = nomInp.value.length + " / 32";
-    form.querySelector("#m-cpt-desc").textContent = descInp.value.length + " / 256";
-  };
-  nomInp.oninput = majCompteurs; descInp.oninput = majCompteurs; majCompteurs();
-  form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
-  form.querySelector("#m-ok").onclick = () => {
-    try {
-      const r = onValider(nomInp.value, descInp.value);
-      if (r && !r.ok) { alert(r.erreur); return; }
-      form.closest(".modal-fond").remove(); rafraichir();
-    } catch (e) {
-      // Erreur imprévue : on l'affiche au lieu de laisser le bouton "ne rien faire".
-      alert("Erreur lors de l'enregistrement : " + e.message);
-    }
-  };
-}
-
 /* ---------- Écran accueil : liste des instances ---------- */
 function vueAccueil(u) {
   const insts = BD.mesInstances();
@@ -431,18 +394,36 @@ function vueAccueil(u) {
   racine.querySelector("#deco").onclick = () => { BD.deconnecter(); App.instanceOuverte = null; rafraichir(); };
   racine.querySelector("#tests").onclick = lancerTests;
   racine.querySelector("#nouvelle").onclick = () => {
+    // Modale de création : maxlength HTML + compteur de caractères en direct,
+    // + validation double côté données. try/catch pour afficher l'erreur précise
+    // si quelque chose échoue (au lieu d'un silence incompréhensible).
     const form = h(`<div>
       <h2>Créer une nouvelle instance</h2>
-      <div class="champ"><label>Nom de l'instance</label><input id="m-nom" /></div>
-      <div class="champ"><label>Description courte</label><textarea id="m-desc" rows="2"></textarea></div>
+      <div class="champ"><label>Nom de l'instance (32 caractères max.)</label>
+        <input id="m-nom" maxlength="32"/><div class="info-txt" id="cpt-nom">0 / 32</div></div>
+      <div class="champ"><label>Description courte (256 caractères max.)</label>
+        <textarea id="m-desc" rows="2" maxlength="256"></textarea><div class="info-txt" id="cpt-desc">0 / 256</div></div>
+      <div class="erreur" id="m-err"></div>
       <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-bleu">Créer</button></div>
     </div>`);
     modal(form);
+    // Compteurs de caractères en direct.
+    const majCompteur = () => {
+      form.querySelector("#cpt-nom").textContent = `${form.querySelector("#m-nom").value.length} / 32`;
+      form.querySelector("#cpt-desc").textContent = `${form.querySelector("#m-desc").value.length} / 256`;
+    };
+    form.querySelector("#m-nom").addEventListener("input", majCompteur);
+    form.querySelector("#m-desc").addEventListener("input", majCompteur);
     form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
     form.querySelector("#m-ok").onclick = () => {
-      const r = BD.creerInstance(form.querySelector("#m-nom").value, form.querySelector("#m-desc").value);
-      if (!r.ok) { alert(r.erreur); return; }
-      form.closest(".modal-fond").remove(); rafraichir();
+      try {
+        const r = BD.creerInstance(form.querySelector("#m-nom").value, form.querySelector("#m-desc").value);
+        if (!r.ok) { form.querySelector("#m-err").textContent = r.erreur; return; }
+        form.closest(".modal-fond").remove(); rafraichir();
+      } catch (err) {
+        form.querySelector("#m-err").textContent = "Erreur inattendue : " + err.message;
+        afficherErreur(err.message + " (création d'instance)");
+      }
     };
   };
 
@@ -461,16 +442,21 @@ function vueAccueil(u) {
       </span>
       <span class="inline-flex"></span>
     </div>`);
-    const act = carte.lastChild;
+    // lastElementChild = dernier ÉLÉMENT uniquement (lastChild peut renvoyer un
+    // nœud texte invisible — espace avant </div> — qui ne peut pas
+    // recevoir de bouton : c'était le bug du bandeau rouge).
+    const act = carte.lastElementChild;
     const bOuvrir = h(`<button class="b-bleu">Ouvrir</button>`);
     bOuvrir.onclick = () => { App.instanceOuverte = inst; App.vue = "lignes"; App.colonnes = null; rafraichir(); };
     const bDupl = h(`<button class="b-vert">Dupliquer</button>`);
+    // Dupliquer : mêmes limites de sécurité que la création.
     bDupl.onclick = () => {
       const form = h(`<div>
         <h2>Dupliquer « ${esc(inst.nom)} »</h2>
         <p class="info-txt">La copie reprendra toutes les données. Ajustez le nom et la description.</p>
-        <div class="champ"><label>Nom</label><input id="m-nom" value="${esc(inst.nom)} (copie)" /></div>
-        <div class="champ"><label>Description</label><textarea id="m-desc" rows="2">${esc(inst.desc)}</textarea></div>
+        <div class="champ"><label>Nom</label><input id="m-nom" maxlength="32" value="${esc(inst.nom).slice(0, 26)} (copie)" /></div>
+        <div class="champ"><label>Description</label><textarea id="m-desc" rows="2" maxlength="256">${esc(inst.desc)}</textarea></div>
+        <div class="erreur" id="m-err"></div>
         <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-vert">Dupliquer</button></div>
       </div>`);
       modal(form);
@@ -622,7 +608,7 @@ function vueLignes() {
   const corps = racine.querySelector("#corps");
   d.lignes.forEach(l => {
     const tr = h(`<tr>${cols.map(c => `<td>${esc(valColonne(d, c, l))}</td>`).join("")}<td style="text-align:right;"></td></tr>`);
-    const actions = tr.lastChild;
+    const actions = tr.lastElementChild;
     const bMod = h(`<button>Modifier</button>`);
     bMod.onclick = () => modalLigne(l.id);
     actions.appendChild(bMod);
@@ -771,7 +757,7 @@ function vueReseauxContrats() {
         </span>
         <span class="inline-flex"></span>
       </div>`);
-      const act = carte.lastChild;
+      const act = carte.lastElementChild;
       const bM = h(`<button>Modifier</button>`); bM.onclick = () => modalReseau(r.id); act.appendChild(bM);
       // Sécurité : on ne supprime pas un réseau encore utilisé par des lignes.
       act.appendChild(boutonSupprimer("Supprimer", () => {
@@ -792,7 +778,7 @@ function vueReseauxContrats() {
         <span class="inline-flex"><span class="etiquette">${nbLignes(l => l.contratId === c.id)} lignes</span></span>
         <span class="inline-flex"></span>
       </div>`);
-      const act = carte.lastChild;
+      const act = carte.lastElementChild;
       const bM = h(`<button>Modifier</button>`); bM.onclick = () => modalContrat(c.id); act.appendChild(bM);
       act.appendChild(boutonSupprimer("Supprimer", () => {
         d.contrats = d.contrats.filter(x => x.id !== c.id); BD.sauver(); rafraichir();
@@ -866,7 +852,7 @@ function vueCatalogue() {
     const carte = h(`<div class="carte" style="display:block;">
       <b>${esc(cat)}</b><div class="inline-flex" style="margin-top:8px;"></div>
     </div>`);
-    const box = carte.lastChild;
+    const box = carte.lastElementChild;
     valeurs.forEach((v, i) => {
       const lib = h(`<span class="libelle">${esc(v)}</span>`);
       const bMod = h(`<button title="Modifier">✎</button>`);
