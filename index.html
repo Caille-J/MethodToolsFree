@@ -607,7 +607,14 @@ function vueLignes() {
 
   const corps = racine.querySelector("#corps");
   d.lignes.forEach(l => {
-    const tr = h(`<tr>${cols.map(c => `<td>${esc(valColonne(d, c, l))}</td>`).join("")}<td style="text-align:right;"></td></tr>`);
+    // PIÈGE HTML : un <tr> est ILLÉGAL dans une <div> — le navigateur le jette
+    // silencieusement, et h() renvoyait alors autre chose qu'une ligne de
+    // tableau (crash à l'affichage dès la 1re ligne : le bug du freeze).
+    // Solution : créer directement un <tr> authentique, puis remplir ses
+    // cellules — dans un vrai <tr>, les <td> sont parfaitement légaux.
+    const tr = document.createElement("tr");
+    tr.innerHTML = cols.map(c => `<td>${esc(valColonne(d, c, l))}</td>`).join("")
+      + `<td style="text-align:right;"></td>`;
     const actions = tr.lastElementChild;
     const bMod = h(`<button>Modifier</button>`);
     bMod.onclick = () => modalLigne(l.id);
