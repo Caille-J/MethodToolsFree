@@ -1,0 +1,927 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HASTUS libre – V1 : Définition de réseau</title>
+<style>
+  /* ============ Style général ============ */
+  :root { font-family: system-ui, sans-serif; color: #0f172a; background: #f1f5f9; }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .bandeau { background: #fff; border-bottom: 1px solid #e2e8f0; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; }
+  .logo { font-weight: 700; color: #0369a1; font-size: 18px; cursor: pointer; background: none; border: none; }
+  .conteneur { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .carte { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+  h1 { font-size: 22px; }
+  h2 { font-size: 18px; margin-top: 0; }
+  .etiquette { display: inline-block; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 999px; padding: 2px 10px; font-size: 12px; }
+  .etiquette.pub { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+  .etiquette.prive { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+  button { cursor: pointer; border-radius: 8px; border: 1px solid #cbd5e1; background: #fff; padding: 6px 12px; font-size: 13px; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  .b-bleu { background: #0284c7; border-color: #0284c7; color: #fff; }
+  .b-bleu:hover { background: #0369a1; }
+  .b-vert { background: #059669; border-color: #059669; color: #fff; }
+  .b-vert:hover { background: #047857; }
+  .onglets { display: flex; gap: 4px; }
+  .onglet { border: 1px solid transparent; background: transparent; padding: 8px 16px; font-weight: 600; border-radius: 8px; color: #475569; }
+  .onglet.actif { background: #e0f2fe; color: #075985; }
+  table { width: 100%; border-collapse: collapse; background: #fff; font-size: 13px; }
+  th { background: #f8fafc; text-align: left; padding: 10px; font-size: 11px; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+  td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; }
+  tr:hover td { background: #f0f9ff; }
+  .enveloppe-table { border: 1px solid #e2e8f0; border-radius: 10px; overflow-x: auto; }
+  input, select, textarea { border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 10px; font-size: 14px; font-family: inherit; width: 100%; }
+  .champ { margin-bottom: 12px; }
+  .champ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .modal-fond { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+  .modal { background: #fff; border-radius: 12px; padding: 20px; width: 100%; max-width: 560px; max-height: 85vh; overflow-y: auto; }
+  .ligne-boutons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+  .suppr { position: relative; overflow: hidden; border: 1px solid #cbd5e1; background: #fff; color: #64748b; font-size: 12px; }
+  .suppr.armed { background: #ef4444; color: #fff; border-color: #ef4444; }
+  .suppr .barre { position: absolute; left: 0; top: 0; bottom: 0; background: #b91c1c; width: 100%; }
+  .suppr.armed .barre { animation: vide 3s linear forwards; }
+  @keyframes vide { from { width: 100%; } to { width: 0%; } }
+  .libelle { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; padding: 4px 10px; font-size: 13px; margin: 3px; }
+  .libelle button { border: none; background: none; padding: 0 2px; color: #94a3b8; }
+  .libelle button:hover { color: #0284c7; }
+  .grille { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 700px) { .grille { grid-template-columns: 1fr; } }
+  .info-txt { font-size: 13px; color: #64748b; }
+  .tests-ok { color: #059669; font-weight: 600; }
+  .tests-ko { color: #dc2626; font-weight: 600; }
+  .menu-col { position: relative; display: inline-block; }
+  .menu-col .panneau { position: absolute; right: 0; top: 100%; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,.15); padding: 8px; width: 240px; z-index: 30; margin-top: 4px; }
+  .menu-col .panneau label { display: flex; align-items: center; gap: 8px; padding: 4px 6px; font-size: 13px; }
+  .vue-switch { display: inline-flex; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+  .vue-switch button { border: none; background: #fff; padding: 6px 12px; font-size: 13px; }
+  .vue-switch button.actif { background: #e0f2fe; color: #075985; font-weight: 600; }
+  .erreur { color: #dc2626; font-size: 13px; margin-top: 4px; }
+  .inline-flex { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* ================================================================
+   HASTUS libre – Version 1 : bloc « Définition du réseau »
+   ----------------------------------------------------------------
+   ARCHITECTURE MODULAIRE (chaque section est indépendante) :
+   1. NOYAU   : logique métier pure, sans aucune référence à l'affichage.
+                C'est cette partie que les tests automatiques vérifient.
+   2. BD      : sauvegarde locale (localStorage = dans ce navigateur).
+   3. VUES    : affichage des écrans (identification, accueil, espace de travail).
+   4. TESTS   : suite de tests automatiques exécutée sur le noyau.
+   ================================================================ */
+
+/* ============ 1. NOYAU : logique métier pure ============ */
+const Noyau = (() => {
+
+  /* Structure de données d'une instance neuve.
+     Le catalogue par défaut est aligné sur les vocabulaires NeTEx/GTFS. */
+  const instanceNeuve = () => ({
+    reseaux: [],   // [{id, nom, validiteDebut, validiteFin}]
+    contrats: [],  // [{id, nom, reseaux:[ids], prive:true}]
+    lignes: [],    // [{id, abrev, nom, reseauId, contratId, activite, mode, vehicules:[], energies:[], fonctions:[]}]
+    catalogue: {
+      "Activités": ["Urbaine", "Régulière (interurbaine)", "Scolaire", "À la demande", "Navette"],
+      "Modes de transport": ["Autobus", "Autocar", "Tramway", "Trolleybus"],
+      "Types de véhicule": ["Bus standard 12 m", "Bus articulé 18 m", "Car 13 m", "Minibus"],
+      "Types d'énergie": ["Gasoil", "HVO", "Électrique", "GNV", "Hybride"],
+      "Fonctions embarquées": ["Wi-Fi", "PMR", "Emport vélo", "Prise USB", "Écran info voyageurs"]
+    },
+    compteur: 1 // générateur d'identifiants locaux à l'instance
+  });
+
+  const nouvelId = (data) => "o" + (data.compteur++);
+
+  /* Règle métier : une ligne = abréviation unique + 1 activité + 1 mode,
+     plusieurs véhicules / énergies / fonctions. Retourne une liste d'erreurs. */
+  function validerLigne(data, ligne, ignoreId) {
+    const errs = [];
+    if (!ligne.abrev || !ligne.abrev.trim()) errs.push("Abréviation obligatoire.");
+    else if (data.lignes.some(l => l.abrev.toLowerCase() === ligne.abrev.trim().toLowerCase()
+              && l.id !== ignoreId)) errs.push("Abréviation déjà utilisée dans cette instance.");
+    if (!ligne.nom || !ligne.nom.trim()) errs.push("Nom commercial obligatoire.");
+    if (!ligne.reseauId) errs.push("Réseau obligatoire.");
+    if (!ligne.activite) errs.push("Activité obligatoire (une seule).");
+    if (!ligne.mode) errs.push("Mode de transport obligatoire (un seul).");
+    return errs;
+  }
+
+  /* Catalogue : ajout (doublons refusés), modification, suppression. */
+  function ajouterLabel(data, categorie, valeur) {
+    const v = (valeur || "").trim();
+    if (!v) return { ok: false, erreur: "Label vide." };
+    if (data.catalogue[categorie].some(x => x.toLowerCase() === v.toLowerCase()))
+      return { ok: false, erreur: "Ce label existe déjà." };
+    data.catalogue[categorie] = [...data.catalogue[categorie], v];
+    return { ok: true };
+  }
+  function modifierLabel(data, categorie, index, valeur) {
+    const v = (valeur || "").trim();
+    if (!v) return { ok: false, erreur: "Label vide." };
+    data.catalogue[categorie] = data.catalogue[categorie].map((x, i) => i === index ? v : x);
+    return { ok: true };
+  }
+  function supprimerLabel(data, categorie, index) {
+    data.catalogue[categorie] = data.catalogue[categorie].filter((_, i) => i !== index);
+    return { ok: true };
+  }
+
+  /* Modification en masse : parse du texte collé depuis Excel.
+     Colonnes attendues : Abrév, Nom, Réseau, Contrat, Activité, Mode.
+     L'abréviation est la clé : existante → mise à jour, nouvelle → création. */
+  function appliquerColle(data, texte) {
+    const lignesCollees = texte.trim().split(/\r?\n/).filter(r => r.trim());
+    const res = { maj: 0, crees: 0, ignorees: 0 };
+    lignesCollees.forEach((row, idx) => {
+      const c = row.split(/\t|;/);
+      // Ignore la ligne d'en-tête si elle commence par "Abrév" (cas du copier-coller depuis l'export).
+      if (idx === 0 && /^abr/i.test((c[0] || "").trim())) return;
+      const abrev = (c[0] || "").trim();
+      if (!abrev) { res.ignorees++; return; }
+      const existante = data.lignes.find(l => l.abrev.toLowerCase() === abrev.toLowerCase());
+      if (existante) {
+        // Ne remplace que les champs réellement remplis dans le collage.
+        if (c[1] && c[1].trim()) existante.nom = c[1].trim();
+        const reseau = (c[2] || "").trim(), contrat = (c[3] || "").trim();
+        if (reseau) { const r = data.reseaux.find(x => x.nom.toLowerCase() === reseau.toLowerCase()); if (r) existante.reseauId = r.id; }
+        if (contrat) { const ct = data.contrats.find(x => x.nom.toLowerCase() === contrat.toLowerCase()); if (ct) existante.contratId = ct.id; }
+        if (c[4] && c[4].trim()) existante.activite = c[4].trim();
+        if (c[5] && c[5].trim()) existante.mode = c[5].trim();
+        res.maj++;
+      } else {
+        // Création : réseau/contrat reliés par nom si trouvés, sinon champs vides.
+        const reseau = data.reseaux.find(x => x.nom.toLowerCase() === (c[2] || "").trim().toLowerCase());
+        const contrat = data.contrats.find(x => x.nom.toLowerCase() === (c[3] || "").trim().toLowerCase());
+        data.lignes.push({
+          id: nouvelId(data), abrev, nom: (c[1] || "").trim(),
+          reseauId: reseau ? reseau.id : null, contratId: contrat ? contrat.id : null,
+          activite: (c[4] || "").trim(), mode: (c[5] || "").trim(),
+          vehicules: [], energies: [], fonctions: []
+        });
+        res.crees++;
+      }
+    });
+    return res;
+  }
+
+  /* Export du tableau au format TSV (collable directement dans Excel). */
+  function exporterTSV(data, cles) {
+    const entetes = cles.join("\t");
+    const corps = data.lignes.map(l => cles.map(c => l[c] || "").join("\t"));
+    return [entetes, ...corps].join("\n");
+  }
+
+  return { instanceNeuve, nouvelId, validerLigne, ajouterLabel, modifierLabel, supprimerLabel, appliquerColle, exporterTSV };
+})();
+
+/* ============ 2. BD : persistance locale ============ */
+const BD = (() => {
+  const CLE = "hastus_libre_v1";
+  let etat = null;
+
+  function charger() {
+    try { etat = JSON.parse(localStorage.getItem(CLE)) || null; } catch (e) { etat = null; }
+    if (!etat) etat = { utilisateurs: [], session: null, instances: [], donnees: {} };
+    return etat;
+  }
+  function sauver() { localStorage.setItem(CLE, JSON.stringify(etat)); }
+  function lire() { if (!etat) charger(); return etat; }
+
+  /* Identification locale (V1 : tout reste dans CE navigateur —
+     la gestion en ligne avec vrais comptes viendra dans un bloc ultérieur). */
+  function inscrire(nom, motDePasse) {
+    const e = lire();
+    if (e.utilisateurs.some(u => u.nom.toLowerCase() === nom.trim().toLowerCase()))
+      return { ok: false, erreur: "Ce nom d'utilisateur existe déjà." };
+    if (!nom.trim() || motDePasse.length < 4)
+      return { ok: false, erreur: "Nom requis, mot de passe de 4 caractères minimum." };
+    // Le PREMIER utilisateur créé devient administrateur.
+    const u = { id: "u" + Date.now(), nom: nom.trim(), mdp: btoa(motDePasse), admin: e.utilisateurs.length === 0 };
+    e.utilisateurs.push(u); e.session = u.id; sauver();
+    return { ok: true };
+  }
+  function connecter(nom, motDePasse) {
+    const e = lire();
+    const u = e.utilisateurs.find(u => u.nom.toLowerCase() === nom.trim().toLowerCase() && u.mdp === btoa(motDePasse));
+    if (!u) return { ok: false, erreur: "Identifiants incorrects." };
+    e.session = u.id; sauver(); return { ok: true };
+  }
+  function deconnecter() { lire().session = null; sauver(); }
+  function utilisateurCourant() { const e = lire(); return e.utilisateurs.find(u => u.id === e.session) || null; }
+
+  /* Instances : chaque instance est isolée (droits + données). */
+  function mesInstances() {
+    const e = lire(); const u = utilisateurCourant();
+    if (!u) return [];
+    return e.instances.filter(i => u.admin || i.proprio === u.id || (i.membres || []).includes(u.id));
+  }
+  function creerInstance(nom, desc) {
+    const e = lire(); const u = utilisateurCourant(); if (!u) return { ok: false, erreur: "Non connecté." };
+    if (!nom.trim()) return { ok: false, erreur: "Nom d'instance obligatoire." };
+    const inst = { id: "i" + Date.now(), nom: nom.trim(), desc: (desc || "").trim(), proprio: u.id, membres: [] };
+    e.instances.push(inst);
+    e.donnees[inst.id] = Noyau.instanceNeuve();
+    sauver(); return { ok: true };
+  }
+  function dupliquerInstance(id, nouveauNom, nouvelleDesc) {
+    const e = lire(); const u = utilisateurCourant(); if (!u) return { ok: false, erreur: "Non connecté." };
+    const src = e.instances.find(i => i.id === id); if (!src) return { ok: false, erreur: "Instance introuvable." };
+    if (!nouveauNom.trim()) return { ok: false, erreur: "Nom obligatoire." };
+    const inst = { ...src, id: "i" + Date.now(), nom: nouveauNom.trim(), desc: nouvelleDesc.trim(), proprio: u.id, membres: [] };
+    // Copie PROFONDE des données : la copie vit ensuite sa vie indépendamment.
+    e.instances.push(inst);
+    e.donnees[inst.id] = JSON.parse(JSON.stringify(e.donnees[id]));
+    sauver(); return { ok: true };
+  }
+  function modifierInstance(id, nom, desc) {
+    const e = lire(); const i = e.instances.find(x => x.id === id); if (!i) return { ok: false, erreur: "Introuvable." };
+    i.nom = nom.trim(); i.desc = (desc || "").trim(); sauver(); return { ok: true };
+  }
+  function supprimerInstance(id) {
+    const e = lire();
+    e.instances = e.instances.filter(i => i.id !== id);
+    delete e.donnees[id]; sauver();
+  }
+  function donneesInstance(id) { return lire().donnees[id]; }
+
+  /* Droits (V1 : affectation d'utilisateurs à une instance ; les rôles
+     détaillés seront définis dans une version ultérieure). */
+  function affecterMembre(idInstance, idUtilisateur) {
+    const e = lire(); const inst = e.instances.find(i => i.id === idInstance);
+    if (!inst) return { ok: false, erreur: "Instance introuvable." };
+    if (!inst.membres.includes(idUtilisateur)) inst.membres.push(idUtilisateur);
+    sauver(); return { ok: true };
+  }
+  function retirerMembre(idInstance, idUtilisateur) {
+    const e = lire(); const inst = e.instances.find(i => i.id === idInstance);
+    if (!inst) return { ok: false, erreur: "Instance introuvable." };
+    inst.membres = inst.membres.filter(m => m !== idUtilisateur);
+    sauver(); return { ok: true };
+  }
+
+  return { charger, lire, sauver, inscrire, connecter, deconnecter, utilisateurCourant,
+           mesInstances, creerInstance, dupliquerInstance, modifierInstance, supprimerInstance,
+           donneesInstance, affecterMembre, retirerMembre };
+})();
+
+/* ============ 3. VUES : affichage ============ */
+
+// Fabrique un élément HTML depuis une chaîne, et échappe le texte dynamique.
+function h(html) { const d = document.createElement("div"); d.innerHTML = html.trim(); return d.firstChild; }
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+/* État d'interface courant (quelle instance, quel onglet, quelles colonnes). */
+const App = { instanceOuverte: null, vue: "lignes", vueObjet: "reseaux", colonnes: null };
+
+function rafraichir() {
+  const app = document.getElementById("app");
+  const u = BD.utilisateurCourant();
+  if (!u) { app.replaceChildren(vueIdentification()); return; }
+  if (!App.instanceOuverte) { app.replaceChildren(vueAccueil(u)); return; }
+  app.replaceChildren(vueEspaceTravail(u));
+}
+
+/* ---------- Écran identification ---------- */
+function vueIdentification() {
+  const racine = h(`<div>
+    <div class="bandeau"><span class="logo">🚌 HASTUS libre</span><span class="info-txt">Version 1 — Définition du réseau</span></div>
+    <div class="conteneur" style="max-width:420px;margin-top:40px;">
+      <div class="carte" style="display:block;">
+        <h1>Identification</h1>
+        <p class="info-txt">Comptes stockés uniquement dans ce navigateur (version 1). La gestion en ligne viendra plus tard.</p>
+        <div class="champ"><label>Nom d'utilisateur</label><input id="f-nom" /></div>
+        <div class="champ"><label>Mot de passe</label><input id="f-mdp" type="password" /></div>
+        <div class="erreur" id="f-err"></div>
+        <div class="ligne-boutons">
+          <button id="f-co">Se connecter</button>
+          <button id="f-ins" class="b-bleu">Créer un compte</button>
+        </div>
+      </div>
+    </div>
+  </div>`);
+  const tenter = (fn) => {
+    const r = fn(racine.querySelector("#f-nom").value, racine.querySelector("#f-mdp").value);
+    if (!r.ok) { racine.querySelector("#f-err").textContent = r.erreur; return; }
+    rafraichir();
+  };
+  racine.querySelector("#f-co").onclick = () => tenter(BD.connecter);
+  racine.querySelector("#f-ins").onclick = () => tenter(BD.inscrire);
+  return racine;
+}
+
+/* ---------- Bouton supprimer sensible (double clic en 3 s) ---------- */
+function boutonSupprimer(texte, onConfirme) {
+  const b = h(`<button class="suppr"><div class="barre"></div><span style="position:relative;">${texte}</span></button>`);
+  let arme = false;
+  b.onclick = () => {
+    if (!arme) {
+      // Premier clic : on arme, la barre se vide en 3 s puis on désarme seul.
+      arme = true; b.classList.add("armed"); b.querySelector("span").textContent = "Confirmer ?";
+      setTimeout(() => { arme = false; b.classList.remove("armed"); b.querySelector("span").textContent = texte; }, 3000);
+    } else { onConfirme(); }
+  };
+  return b;
+}
+
+/* Fenêtre modale générique. */
+function modal(contenu) {
+  const fond = h(`<div class="modal-fond"><div class="modal"></div></div>`);
+  fond.firstChild.appendChild(contenu);
+  fond.onclick = (e) => { if (e.target === fond) fond.remove(); };
+  document.body.appendChild(fond);
+  return fond;
+}
+
+/* ---------- Écran accueil : liste des instances ---------- */
+function vueAccueil(u) {
+  const insts = BD.mesInstances();
+  const racine = h(`<div>
+    <div class="bandeau">
+      <span class="logo">🚌 HASTUS libre</span>
+      <span class="inline-flex"><span class="info-txt">${esc(u.nom)}${u.admin ? " (admin)" : ""}</span>
+      <button id="deco">Se déconnecter</button></span>
+    </div>
+    <div class="conteneur">
+      <div class="inline-flex" style="justify-content:space-between;width:100%;">
+        <h1>Mes instances de travail</h1>
+        <span class="inline-flex">
+          <button id="tests">🧪 Tests</button>
+          <button id="nouvelle" class="b-bleu">+ Nouvelle instance</button>
+        </span>
+      </div>
+      <div id="liste"></div>
+    </div>
+  </div>`);
+  racine.querySelector("#deco").onclick = () => { BD.deconnecter(); App.instanceOuverte = null; rafraichir(); };
+  racine.querySelector("#tests").onclick = lancerTests;
+  racine.querySelector("#nouvelle").onclick = () => {
+    const form = h(`<div>
+      <h2>Créer une nouvelle instance</h2>
+      <div class="champ"><label>Nom de l'instance</label><input id="m-nom" /></div>
+      <div class="champ"><label>Description courte</label><textarea id="m-desc" rows="2"></textarea></div>
+      <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-bleu">Créer</button></div>
+    </div>`);
+    modal(form);
+    form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
+    form.querySelector("#m-ok").onclick = () => {
+      const r = BD.creerInstance(form.querySelector("#m-nom").value, form.querySelector("#m-desc").value);
+      if (!r.ok) { alert(r.erreur); return; }
+      form.closest(".modal-fond").remove(); rafraichir();
+    };
+  };
+
+  const liste = racine.querySelector("#liste");
+  if (!insts.length) {
+    liste.appendChild(h(`<p class="info-txt" style="text-align:center;padding:40px;">Aucune instance. Créez-en une pour commencer !</p>`));
+  }
+  insts.forEach(inst => {
+    const d = BD.donneesInstance(inst.id);
+    const carte = h(`<div class="carte">
+      <div><b>${esc(inst.nom)}</b><div class="info-txt">${esc(inst.desc)}</div></div>
+      <span class="inline-flex">
+        <span class="etiquette">${d.reseaux.length} réseaux</span>
+        <span class="etiquette">${d.contrats.length} contrats</span>
+        <span class="etiquette">${d.lignes.length} lignes</span>
+      </span>
+      <span class="inline-flex"></span>
+    </div>`);
+    const act = carte.lastChild;
+    const bOuvrir = h(`<button class="b-bleu">Ouvrir</button>`);
+    bOuvrir.onclick = () => { App.instanceOuverte = inst; App.vue = "lignes"; App.colonnes = null; rafraichir(); };
+    const bDupl = h(`<button class="b-vert">Dupliquer</button>`);
+    bDupl.onclick = () => {
+      const form = h(`<div>
+        <h2>Dupliquer « ${esc(inst.nom)} »</h2>
+        <p class="info-txt">La copie reprendra toutes les données. Ajustez le nom et la description.</p>
+        <div class="champ"><label>Nom</label><input id="m-nom" value="${esc(inst.nom)} (copie)" /></div>
+        <div class="champ"><label>Description</label><textarea id="m-desc" rows="2">${esc(inst.desc)}</textarea></div>
+        <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-vert">Dupliquer</button></div>
+      </div>`);
+      modal(form);
+      form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
+      form.querySelector("#m-ok").onclick = () => {
+        const r = BD.dupliquerInstance(inst.id, form.querySelector("#m-nom").value, form.querySelector("#m-desc").value);
+        if (!r.ok) { alert(r.erreur); return; }
+        form.closest(".modal-fond").remove(); rafraichir();
+      };
+    };
+    const bMod = h(`<button>Modifier</button>`);
+    bMod.onclick = () => {
+      const form = h(`<div>
+        <h2>Modifier l'instance</h2>
+        <div class="champ"><label>Nom</label><input id="m-nom" value="${esc(inst.nom)}" /></div>
+        <div class="champ"><label>Description</label><textarea id="m-desc" rows="2">${esc(inst.desc)}</textarea></div>
+        <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-bleu">Enregistrer</button></div>
+      </div>`);
+      modal(form);
+      form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
+      form.querySelector("#m-ok").onclick = () => {
+        const r = BD.modifierInstance(inst.id, form.querySelector("#m-nom").value, form.querySelector("#m-desc").value);
+        if (!r.ok) { alert(r.erreur); return; }
+        form.closest(".modal-fond").remove(); rafraichir();
+      };
+    };
+    act.appendChild(bOuvrir); act.appendChild(bDupl); act.appendChild(bMod);
+    act.appendChild(boutonSupprimer("Supprimer", () => { BD.supprimerInstance(inst.id); rafraichir(); }));
+    // Gestion des droits : réservée à l'admin ou au propriétaire de l'instance.
+    if (u.admin || inst.proprio === u.id) {
+      const bDroits = h(`<button>👥 Droits</button>`);
+      bDroits.onclick = () => modalDroits(inst);
+      act.appendChild(bDroits);
+    }
+    liste.appendChild(carte);
+  });
+  return racine;
+}
+
+/* Fenêtre de gestion des droits (V1 : affectation simple de membres). */
+function modalDroits(inst) {
+  const e = BD.lire();
+  const form = h(`<div>
+    <h2>Droits — ${esc(inst.nom)}</h2>
+    <p class="info-txt">Affectez des utilisateurs à cette instance. Les rôles détaillés viendront dans une version ultérieure.</p>
+    <div id="membres"></div>
+    <div class="champ" style="margin-top:12px;"><label>Ajouter un utilisateur</label>
+      <select id="m-choix"><option value="">— Choisir —</option></select></div>
+    <div class="ligne-boutons"><button id="m-fermer">Fermer</button></div>
+  </div>`);
+  const membresBox = form.querySelector("#membres");
+  const dessinerMembres = () => {
+    membresBox.innerHTML = "";
+    e.utilisateurs.filter(x => inst.membres.includes(x.id) || x.id === inst.proprio).forEach(m => {
+      const role = m.id === inst.proprio ? "propriétaire" : "membre";
+      const l = h(`<div class="carte" style="margin:6px 0;"><span>${esc(m.nom)} <span class="etiquette">${role}</span></span></div>`);
+      if (m.id !== inst.proprio) {
+        const b = h(`<button>Retirer</button>`);
+        b.onclick = () => { BD.retirerMembre(inst.id, m.id); dessinerMembres(); };
+        l.appendChild(b);
+      }
+      membresBox.appendChild(l);
+    });
+    const choix = form.querySelector("#m-choix");
+    choix.innerHTML = '<option value="">— Choisir —</option>' +
+      e.utilisateurs.filter(x => !inst.membres.includes(x.id) && x.id !== inst.proprio)
+        .map(x => `<option value="${x.id}">${esc(x.nom)}</option>`).join("");
+  };
+  form.querySelector("#m-choix").onchange = (ev) => {
+    if (ev.target.value) { BD.affecterMembre(inst.id, ev.target.value); dessinerMembres(); }
+  };
+  form.querySelector("#m-fermer").onclick = () => form.closest(".modal-fond").remove();
+  dessinerMembres();
+  modal(form);
+}
+
+/* ---------- Espace de travail (instance ouverte) ---------- */
+function vueEspaceTravail(u) {
+  const racine = h(`<div>
+    <div class="bandeau">
+      <span class="inline-flex"><button class="logo" id="retour">🚌 HASTUS libre</button>
+      <span class="etiquette">${esc(App.instanceOuverte.nom)}</span></span>
+      <span class="info-txt">${esc(u.nom)}</span>
+    </div>
+    <div class="bandeau" style="padding:6px 16px;">
+      <div class="inline-flex" id="onglets"></div>
+    </div>
+    <div class="conteneur" id="contenu"></div>
+  </div>`);
+  racine.querySelector("#retour").onclick = () => { App.instanceOuverte = null; App.colonnes = null; rafraichir(); };
+  const onglets = racine.querySelector("#onglets");
+  [["lignes", "🚏 Toutes les lignes"], ["vue", "🚌 Réseaux & contrats"], ["catalogue", "🏷️ Catalogue de l'instance"]].forEach(([cle, label]) => {
+    const b = h(`<button class="onglet ${App.vue === cle ? "actif" : ""}">${label}</button>`);
+    b.onclick = () => { App.vue = cle; rafraichir(); };
+    onglets.appendChild(b);
+  });
+  const contenu = racine.querySelector("#contenu");
+  if (App.vue === "lignes") contenu.appendChild(vueLignes());
+  if (App.vue === "vue") contenu.appendChild(vueReseauxContrats());
+  if (App.vue === "catalogue") contenu.appendChild(vueCatalogue());
+  return racine;
+}
+
+/* ---------- Vue : toutes les lignes (tableau paramétrable) ---------- */
+/* Les colonnes calculées ("auto") ne stockent rien : leur valeur est
+   dérivée à la volée. Les préférences de colonnes sont mémorisées par instance. */
+const COLONNES = [
+  { cle: "abrev", label: "Abrév." },
+  { cle: "nom", label: "Nom commercial" },
+  { cle: "reseau", label: "Réseau", join: "reseauId", src: "reseaux" },
+  { cle: "contrat", label: "Contrat 🔒", join: "contratId", src: "contrats" },
+  { cle: "activite", label: "Activité" },
+  { cle: "mode", label: "Mode" },
+  { cle: "nbVehicules", label: "Nb véhicules", calc: l => l.vehicules.length },
+  { cle: "nbEnergies", label: "Nb énergies", calc: l => l.energies.length },
+  { cle: "nbFonctions", label: "Nb fonctions", calc: l => l.fonctions.length },
+];
+function colonnesAffichees() {
+  const pref = localStorage.getItem("hastus_colonnes_" + App.instanceOuverte.id);
+  return pref ? JSON.parse(pref) : ["abrev", "nom", "reseau", "contrat", "activite", "mode", "nbVehicules"];
+}
+function valColonne(d, col, l) {
+  if (col.calc) return col.calc(l);
+  if (col.join) { const o = d[col.src].find(x => x.id === l[col.join]); return o ? o.nom : "—"; }
+  return l[col.cle] || "";
+}
+
+function vueLignes() {
+  const d = BD.donneesInstance(App.instanceOuverte.id);
+  if (!App.colonnes) App.colonnes = colonnesAffichees();
+  const cols = COLONNES.filter(c => App.colonnes.includes(c.cle));
+  const racine = h(`<div>
+    <div class="inline-flex" style="justify-content:space-between;width:100%;margin-bottom:12px;">
+      <span class="info-txt">Toutes les lignes de cette instance.</span>
+      <span class="inline-flex">
+        <span class="menu-col"><button id="b-col">⚙ Colonnes</button></span>
+        <button id="b-copy">📋 Copier (Excel)</button>
+        <button id="b-masse">✏️ Modifier en masse</button>
+        <button id="b-nouv" class="b-bleu">+ Créer une ligne</button>
+      </span>
+    </div>
+    <div class="enveloppe-table"><table>
+      <thead><tr>${cols.map(c => `<th>${c.label}${c.calc ? ' <span class="etiquette">auto</span>' : ""}</th>`).join("")}<th style="text-align:right;">Actions</th></tr></thead>
+      <tbody id="corps"></tbody>
+    </table></div>
+    <p class="info-txt" id="compte" style="margin-top:8px;"></p>
+  </div>`);
+
+  const corps = racine.querySelector("#corps");
+  d.lignes.forEach(l => {
+    const tr = h(`<tr>${cols.map(c => `<td>${esc(valColonne(d, c, l))}</td>`).join("")}<td style="text-align:right;"></td></tr>`);
+    const actions = tr.lastChild;
+    const bMod = h(`<button>Modifier</button>`);
+    bMod.onclick = () => modalLigne(l.id);
+    actions.appendChild(bMod);
+    actions.appendChild(boutonSupprimer("Supprimer", () => {
+      d.lignes = d.lignes.filter(x => x.id !== l.id); BD.sauver(); rafraichir();
+    }));
+    corps.appendChild(tr);
+  });
+  racine.querySelector("#compte").textContent = `${d.lignes.length} ligne(s)`;
+
+  // Menu ⚙ Colonnes : cocher / décocher, mémorisé pour cette instance.
+  const bCol = racine.querySelector("#b-col");
+  bCol.onclick = () => {
+    const ancien = racine.querySelector(".panneau");
+    if (ancien) { ancien.remove(); return; }
+    const pan = h(`<div class="panneau">${COLONNES.map(c =>
+      `<label><input type="checkbox" value="${c.cle}" ${App.colonnes.includes(c.cle) ? "checked" : ""}/> ${c.label}</label>`).join("")}</div>`);
+    pan.querySelectorAll("input").forEach(inp => inp.onchange = () => {
+      App.colonnes = Array.from(pan.querySelectorAll("input:checked")).map(x => x.value);
+      localStorage.setItem("hastus_colonnes_" + App.instanceOuverte.id, JSON.stringify(App.colonnes));
+      rafraichir();
+    });
+    bCol.parentElement.appendChild(pan);
+  };
+
+  // Copier vers Excel (TSV) : seules les colonnes brutes sont exportées.
+  racine.querySelector("#b-copy").onclick = () => {
+    const colsBase = cols.filter(c => !c.calc);
+    const tsv = colsBase.map(c => c.label).join("\t") + "\n" +
+      d.lignes.map(l => colsBase.map(c => valColonne(d, c, l)).join("\t")).join("\n");
+    navigator.clipboard?.writeText(tsv);
+    alert("Tableau copié ! Collez-le dans Excel (Ctrl+V).");
+  };
+
+  // Modification en masse : collage Excel (délégation au noyau).
+  racine.querySelector("#b-masse").onclick = () => {
+    const form = h(`<div>
+      <h2>Modification en masse</h2>
+      <p class="info-txt">Collez des lignes depuis Excel, colonnes séparées par tabulations :
+      <b>Abrév — Nom — Réseau — Contrat — Activité — Mode</b>.<br/>
+      Une abréviation existante est mise à jour ; une nouvelle crée une ligne.</p>
+      <textarea id="m-texte" rows="8" style="width:100%;"></textarea>
+      <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-bleu">Appliquer</button></div>
+    </div>`);
+    modal(form);
+    form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
+    form.querySelector("#m-ok").onclick = () => {
+      const res = Noyau.appliquerColle(d, form.querySelector("#m-texte").value);
+      BD.sauver(); form.closest(".modal-fond").remove(); rafraichir();
+      alert(`Résultat : ${res.maj} ligne(s) mise(s) à jour, ${res.crees} créée(s), ${res.ignorees} ignorée(s).`);
+    };
+  };
+
+  racine.querySelector("#b-nouv").onclick = () => modalLigne(null);
+  return racine;
+}
+
+/* Formulaire d'une ligne (création ou modification) avec validation métier. */
+function modalLigne(idLigne) {
+  const d = BD.donneesInstance(App.instanceOuverte.id);
+  const existante = idLigne ? d.lignes.find(l => l.id === idLigne) : null;
+  const init = existante || { abrev: "", nom: "", reseauId: "", contratId: null, activite: "", mode: "", vehicules: [], energies: [], fonctions: [] };
+  const cat = d.catalogue;
+  // Générateur de blocs à choix multiples (véhicules / énergies / fonctions).
+  const casesMultiples = (titre, catCle, prop) => `<div class="champ"><label>${titre} (plusieurs)</label>
+    <div class="inline-flex">${cat[catCle].map(v =>
+      `<label class="libelle"><input type="checkbox" data-grp="${prop}" value="${esc(v)}" ${init[prop].includes(v) ? "checked" : ""}/> ${esc(v)}</label>`).join("")}</div></div>`;
+  const form = h(`<div>
+    <h2>${existante ? "Modifier" : "Créer"} une ligne</h2>
+    <div class="grille">
+      <div class="champ"><label>Abréviation</label><input id="m-abrev" value="${esc(init.abrev)}"/></div>
+      <div class="champ"><label>Nom commercial</label><input id="m-nom" value="${esc(init.nom)}"/></div>
+      <div class="champ"><label>Réseau</label><select id="m-reseau"><option value="">— Choisir —</option>
+        ${d.reseaux.map(r => `<option value="${r.id}" ${init.reseauId === r.id ? "selected" : ""}>${esc(r.nom)}</option>`).join("")}</select></div>
+      <div class="champ"><label>Contrat 🔒 (privé transporteur)</label><select id="m-contrat"><option value="">— Aucun —</option>
+        ${d.contrats.map(c => `<option value="${c.id}" ${init.contratId === c.id ? "selected" : ""}>${esc(c.nom)}</option>`).join("")}</select></div>
+      <div class="champ"><label>Activité (1 seule) <span class="etiquette pub">🚌 public</span></label>
+        <select id="m-act"><option value="">— Choisir —</option>
+        ${cat["Activités"].map(a => `<option ${init.activite === a ? "selected" : ""}>${esc(a)}</option>`).join("")}</select></div>
+      <div class="champ"><label>Mode de transport (1 seul) <span class="etiquette pub">🚌 public</span></label>
+        <select id="m-mode"><option value="">— Choisir —</option>
+        ${cat["Modes de transport"].map(m => `<option ${init.mode === m ? "selected" : ""}>${esc(m)}</option>`).join("")}</select></div>
+    </div>
+    ${casesMultiples("Types de véhicule", "Types de véhicule", "vehicules")}
+    ${casesMultiples("Types d'énergie", "Types d'énergie", "energies")}
+    ${casesMultiples("Fonctions embarquées", "Fonctions embarquées", "fonctions")}
+    <div class="erreur" id="m-err"></div>
+    <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-bleu">Enregistrer</button></div>
+  </div>`);
+  modal(form);
+  form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
+  form.querySelector("#m-ok").onclick = () => {
+    const ligne = {
+      ...(existante || {}),
+      abrev: form.querySelector("#m-abrev").value,
+      nom: form.querySelector("#m-nom").value,
+      reseauId: form.querySelector("#m-reseau").value,
+      contratId: form.querySelector("#m-contrat").value || null,
+      activite: form.querySelector("#m-act").value,
+      mode: form.querySelector("#m-mode").value,
+      vehicules: Array.from(form.querySelectorAll('[data-grp="vehicules"]:checked')).map(x => x.value),
+      energies: Array.from(form.querySelectorAll('[data-grp="energies"]:checked')).map(x => x.value),
+      fonctions: Array.from(form.querySelectorAll('[data-grp="fonctions"]:checked')).map(x => x.value)
+    };
+    // Validation métier AVANT enregistrement (mêmes règles que les tests automatiques).
+    const errs = Noyau.validerLigne(d, ligne, existante ? existante.id : null);
+    if (errs.length) { form.querySelector("#m-err").innerHTML = errs.map(e => "• " + esc(e)).join("<br/>"); return; }
+    if (existante) { Object.assign(existante, ligne); }
+    else { ligne.id = Noyau.nouvelId(d); d.lignes.push(ligne); }
+    BD.sauver(); form.closest(".modal-fond").remove(); rafraichir();
+  };
+}
+
+/* ---------- Vue : réseaux & contrats ---------- */
+function vueReseauxContrats() {
+  const d = BD.donneesInstance(App.instanceOuverte.id);
+  const racine = h(`<div>
+    <div class="inline-flex" style="justify-content:space-between;width:100%;margin-bottom:12px;">
+      <span class="vue-switch" id="switch"></span>
+      <span id="b-creer"></span>
+    </div>
+    <div id="liste"></div>
+  </div>`);
+  const sw = racine.querySelector("#switch");
+  const bReseaux = h(`<button class="${App.vueObjet === "reseaux" ? "actif" : ""}">Vue par réseau</button>`);
+  bReseaux.onclick = () => { App.vueObjet = "reseaux"; rafraichir(); };
+  const bContrats = h(`<button class="${App.vueObjet === "contrats" ? "actif" : ""}">Vue par contrat</button>`);
+  bContrats.onclick = () => { App.vueObjet = "contrats"; rafraichir(); };
+  sw.appendChild(bReseaux); sw.appendChild(bContrats);
+  const bCreer = racine.querySelector("#b-creer");
+  const liste = racine.querySelector("#liste");
+  const nbLignes = (pred) => d.lignes.filter(pred).length;
+
+  if (App.vueObjet === "reseaux") {
+    const b = h(`<button class="b-bleu">+ Créer un réseau</button>`);
+    b.onclick = () => modalReseau(null);
+    bCreer.appendChild(b);
+    if (!d.reseaux.length) liste.appendChild(h(`<p class="info-txt">Aucun réseau. Créez-en un : il sera disponible pour rattacher des lignes.</p>`));
+    d.reseaux.forEach(r => {
+      const carte = h(`<div class="carte">
+        <div><b>${esc(r.nom)}</b> <span class="etiquette pub">🚌 public</span>
+          <div class="info-txt">Validité : ${esc(r.validiteDebut || "?")} → ${esc(r.validiteFin || "?")}</div></div>
+        <span class="inline-flex">
+          <span class="etiquette">${nbLignes(l => l.reseauId === r.id)} lignes</span>
+          <span class="etiquette">${d.contrats.filter(c => (c.reseaux || []).includes(r.id)).length} contrats</span>
+        </span>
+        <span class="inline-flex"></span>
+      </div>`);
+      const act = carte.lastChild;
+      const bM = h(`<button>Modifier</button>`); bM.onclick = () => modalReseau(r.id); act.appendChild(bM);
+      // Sécurité : on ne supprime pas un réseau encore utilisé par des lignes.
+      act.appendChild(boutonSupprimer("Supprimer", () => {
+        if (nbLignes(l => l.reseauId === r.id)) { alert("Impossible : des lignes sont rattachées à ce réseau."); return; }
+        d.reseaux = d.reseaux.filter(x => x.id !== r.id); BD.sauver(); rafraichir();
+      }));
+      liste.appendChild(carte);
+    });
+  } else {
+    const b = h(`<button class="b-bleu">+ Créer un contrat</button>`);
+    b.onclick = () => modalContrat(null);
+    bCreer.appendChild(b);
+    if (!d.contrats.length) liste.appendChild(h(`<p class="info-txt">Aucun contrat. Les contrats sont des objets privés transporteur.</p>`));
+    d.contrats.forEach(c => {
+      const carte = h(`<div class="carte">
+        <div><b>${esc(c.nom)}</b> <span class="etiquette prive">🔒 Privé transporteur</span>
+          <div class="info-txt">Réseaux : ${d.reseaux.filter(r => (c.reseaux || []).includes(r.id)).map(r => esc(r.nom)).join(", ") || "—"}</div></div>
+        <span class="inline-flex"><span class="etiquette">${nbLignes(l => l.contratId === c.id)} lignes</span></span>
+        <span class="inline-flex"></span>
+      </div>`);
+      const act = carte.lastChild;
+      const bM = h(`<button>Modifier</button>`); bM.onclick = () => modalContrat(c.id); act.appendChild(bM);
+      act.appendChild(boutonSupprimer("Supprimer", () => {
+        d.contrats = d.contrats.filter(x => x.id !== c.id); BD.sauver(); rafraichir();
+      }));
+      liste.appendChild(carte);
+    });
+  }
+  return racine;
+}
+
+/* Formulaire réseau : nom + période de validité (bornée à 2099). */
+function modalReseau(idReseau) {
+  const d = BD.donneesInstance(App.instanceOuverte.id);
+  const r = idReseau ? d.reseaux.find(x => x.id === idReseau) : null;
+  const form = h(`<div>
+    <h2>${r ? "Modifier" : "Créer"} un réseau</h2>
+    <div class="champ"><label>Nom du réseau <span class="etiquette pub">🚌 public</span></label><input id="m-nom" value="${r ? esc(r.nom) : ""}"/></div>
+    <div class="grille">
+      <div class="champ"><label>Début de validité</label><input id="m-deb" type="date" value="${r ? esc(r.validiteDebut) : ""}"/></div>
+      <div class="champ"><label>Fin de validité (jusqu'à 2099)</label><input id="m-fin" type="date" min="2020-01-01" max="2099-12-31" value="${r ? esc(r.validiteFin) : ""}"/></div>
+    </div>
+    <div class="erreur" id="m-err"></div>
+    <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-bleu">Enregistrer</button></div>
+  </div>`);
+  modal(form);
+  form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
+  form.querySelector("#m-ok").onclick = () => {
+    const nom = form.querySelector("#m-nom").value.trim();
+    const deb = form.querySelector("#m-deb").value, fin = form.querySelector("#m-fin").value;
+    if (!nom) { form.querySelector("#m-err").textContent = "Nom obligatoire."; return; }
+    if (deb && fin && deb > fin) { form.querySelector("#m-err").textContent = "La fin de validité doit suivre le début."; return; }
+    if (fin && fin > "2099-12-31") { form.querySelector("#m-err").textContent = "La validité ne peut dépasser 2099."; return; }
+    if (r) { r.nom = nom; r.validiteDebut = deb; r.validiteFin = fin; }
+    else d.reseaux.push({ id: Noyau.nouvelId(d), nom, validiteDebut: deb, validiteFin: fin });
+    BD.sauver(); form.closest(".modal-fond").remove(); rafraichir();
+  };
+}
+
+/* Formulaire contrat : nom + réseaux concernés. */
+function modalContrat(idContrat) {
+  const d = BD.donneesInstance(App.instanceOuverte.id);
+  const c = idContrat ? d.contrats.find(x => x.id === idContrat) : null;
+  const form = h(`<div>
+    <h2>${c ? "Modifier" : "Créer"} un contrat</h2>
+    <div class="champ"><label>Nom du contrat <span class="etiquette prive">🔒 Privé transporteur</span></label><input id="m-nom" value="${c ? esc(c.nom) : ""}"/></div>
+    <div class="champ"><label>Réseaux concernés</label>
+      <div class="inline-flex">${d.reseaux.map(r =>
+        `<label class="libelle"><input type="checkbox" value="${r.id}" ${c && (c.reseaux || []).includes(r.id) ? "checked" : ""}/> ${esc(r.nom)}</label>`).join("") || '<span class="info-txt">Créez d\'abord des réseaux.</span>'}</div></div>
+    <div class="erreur" id="m-err"></div>
+    <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-bleu">Enregistrer</button></div>
+  </div>`);
+  modal(form);
+  form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
+  form.querySelector("#m-ok").onclick = () => {
+    const nom = form.querySelector("#m-nom").value.trim();
+    if (!nom) { form.querySelector("#m-err").textContent = "Nom obligatoire."; return; }
+    const reseaux = Array.from(form.querySelectorAll('input[type="checkbox"]:checked')).map(x => x.value);
+    if (c) { c.nom = nom; c.reseaux = reseaux; }
+    else d.contrats.push({ id: Noyau.nouvelId(d), nom, reseaux });
+    BD.sauver(); form.closest(".modal-fond").remove(); rafraichir();
+  };
+}
+
+/* ---------- Vue : catalogue de l'instance ---------- */
+function vueCatalogue() {
+  const d = BD.donneesInstance(App.instanceOuverte.id);
+  const racine = h(`<div><p class="info-txt">Listes de référence de l'instance (alignées NeTEx/GTFS).
+    Ajoutez, modifiez ou supprimez des labels : les formulaires en héritent.</p><div id="cats"></div></div>`);
+  const cats = racine.querySelector("#cats");
+  Object.entries(d.catalogue).forEach(([cat, valeurs]) => {
+    const carte = h(`<div class="carte" style="display:block;">
+      <b>${esc(cat)}</b><div class="inline-flex" style="margin-top:8px;"></div>
+    </div>`);
+    const box = carte.lastChild;
+    valeurs.forEach((v, i) => {
+      const lib = h(`<span class="libelle">${esc(v)}</span>`);
+      const bMod = h(`<button title="Modifier">✎</button>`);
+      bMod.onclick = () => {
+        const nv = prompt("Modifier le label :", v);
+        if (nv !== null) { const r = Noyau.modifierLabel(d, cat, i, nv); if (!r.ok) alert(r.erreur); else { BD.sauver(); rafraichir(); } }
+      };
+      const bSup = h(`<button title="Supprimer">✕</button>`);
+      bSup.onclick = () => { Noyau.supprimerLabel(d, cat, i); BD.sauver(); rafraichir(); };
+      lib.appendChild(bMod); lib.appendChild(bSup);
+      box.appendChild(lib);
+    });
+    const bAdd = h(`<button class="libelle" style="border-style:dashed;color:#64748b;">+ Ajouter…</button>`);
+    bAdd.onclick = () => {
+      const nv = prompt("Nouveau label (s'ajoute à la liste) :");
+      if (nv) { const r = Noyau.ajouterLabel(d, cat, nv); if (!r.ok) alert(r.erreur); else { BD.sauver(); rafraichir(); } }
+    };
+    box.appendChild(bAdd);
+    cats.appendChild(carte);
+  });
+  return racine;
+}
+
+/* ============ 4. TESTS : suite automatique sur le noyau ============ */
+/* Principe : on manipule un jeu de données fictif EN MÉMOIRE (jamais
+   sauvegardé) et on compare le résultat à ce qu'on attend. Un test
+   échoué = un message précis sur la régression. Relancez après chaque
+   modification de l'appli. */
+function lancerTests() {
+  const results = [];
+  const test = (nom, fn) => {
+    try { fn(); results.push({ nom, ok: true }); }
+    catch (e) { results.push({ nom, ok: false, msg: e.message }); }
+  };
+  const assert = (cond, msg) => { if (!cond) throw new Error(msg); };
+
+  test("Instance neuve contient les 5 catégories du catalogue", () => {
+    const d = Noyau.instanceNeuve();
+    assert(Object.keys(d.catalogue).length === 5, "5 catégories attendues");
+    assert(d.lignes.length === 0, "Aucune ligne au départ");
+  });
+
+  test("Une ligne valide passe la validation", () => {
+    const d = Noyau.instanceNeuve();
+    d.reseaux.push({ id: "r1", nom: "STAR", validiteDebut: "2026-09-01", validiteFin: "2099-12-31" });
+    const errs = Noyau.validerLigne(d, { abrev: "A", nom: "Ligne A", reseauId: "r1", activite: "Urbaine", mode: "Autobus" }, null);
+    assert(errs.length === 0, "Aucune erreur attendue, reçues : " + errs.join(" "));
+  });
+
+  test("Une ligne sans activité ni mode est refusée", () => {
+    const d = Noyau.instanceNeuve();
+    d.reseaux.push({ id: "r1", nom: "STAR", validiteDebut: "", validiteFin: "" });
+    const errs = Noyau.validerLigne(d, { abrev: "A", nom: "Ligne A", reseauId: "r1", activite: "", mode: "" }, null);
+    assert(errs.some(e => e.includes("Activité")), "L'erreur 'Activité obligatoire' manque");
+    assert(errs.some(e => e.includes("Mode")), "L'erreur 'Mode obligatoire' manque");
+  });
+
+  test("Deux lignes ne peuvent pas avoir la même abréviation", () => {
+    const d = Noyau.instanceNeuve();
+    d.reseaux.push({ id: "r1", nom: "STAR", validiteDebut: "", validiteFin: "" });
+    assert(Noyau.validerLigne(d, { abrev: "A", nom: "Ligne A", reseauId: "r1", activite: "Urbaine", mode: "Autobus" }, null).length === 0,
+      "La première ligne devrait être valide");
+    d.lignes.push({ id: "l1", abrev: "A", nom: "Ligne A", reseauId: "r1", activite: "Urbaine", mode: "Autobus", vehicules: [], energies: [], fonctions: [] });
+    const errs2 = Noyau.validerLigne(d, { abrev: "a", nom: "Autre", reseauId: "r1", activite: "Urbaine", mode: "Autobus" }, null);
+    assert(errs2.some(e => e.includes("Abréviation")), "Le doublon d'abréviation (même casse) doit être détecté");
+  });
+
+  test("Catalogue : ajout, refus de doublon, modification, suppression", () => {
+    const d = Noyau.instanceNeuve();
+    assert(Noyau.ajouterLabel(d, "Activités", "Navette nocturne").ok, "L'ajout devrait réussir");
+    assert(!Noyau.ajouterLabel(d, "Activités", "urbaine").ok, "Un doublon (même casse) doit être refusé");
+    Noyau.modifierLabel(d, "Activités", 0, "Urbaine dense");
+    assert(d.catalogue["Activités"][0] === "Urbaine dense", "Le label modifié doit remplacer l'ancien");
+    const avant = d.catalogue["Modes de transport"].length;
+    Noyau.supprimerLabel(d, "Modes de transport", 0);
+    assert(d.catalogue["Modes de transport"].length === avant - 1, "La suppression doit retirer exactement 1 label");
+  });
+
+  test("Colle Excel : mise à jour, création, en-tête ignoré", () => {
+    const d = Noyau.instanceNeuve();
+    d.reseaux.push({ id: "r1", nom: "STAR", validiteDebut: "", validiteFin: "" });
+    d.contrats.push({ id: "c1", nom: "Délégation", reseaux: ["r1"] });
+    d.lignes.push({ id: "l1", abrev: "A", nom: "Ligne A", reseauId: "r1", contratId: null, activite: "Urbaine", mode: "Autobus", vehicules: [], energies: [], fonctions: [] });
+    const colle = "Abrév\tNom\tRéseau\tContrat\tActivité\tMode\nA\tLigne A modifiée\tSTAR\tDélégation\tUrbaine\tAutocar\nB\tNouvelle ligne\tSTAR\t\t\t";
+    const res = Noyau.appliquerColle(d, colle);
+    assert(res.maj === 1, "1 ligne devrait être mise à jour, reçu " + res.maj);
+    assert(res.crees === 1, "1 ligne devrait être créée, reçu " + res.crees);
+    assert(d.lignes.find(l => l.abrev === "A").nom === "Ligne A modifiée", "Le nom doit être mis à jour");
+    assert(d.lignes.find(l => l.abrev === "A").contratId === "c1", "Le contrat doit être relié par nom");
+    assert(!!d.lignes.find(l => l.abrev === "B"), "La nouvelle ligne B doit exister");
+  });
+
+  test("Export TSV : en-têtes et lignes alignés", () => {
+    const d = Noyau.instanceNeuve();
+    d.lignes.push({ id: "l1", abrev: "A", nom: "Ligne A", reseauId: null, activite: "Urbaine", mode: "Autobus", vehicules: [], energies: [], fonctions: [] });
+    const tsv = Noyau.exporterTSV(d, ["abrev", "nom"]);
+    const lignes = tsv.split("\n");
+    assert(lignes[0] === "abrev\tnom", "En-tête TSV incorrect : " + lignes[0]);
+    assert(lignes[1] === "A\tLigne A", "Ligne TSV incorrecte : " + lignes[1]);
+  });
+
+  test("Isolation : modifier une copie ne touche jamais l'original", () => {
+    const d1 = Noyau.instanceNeuve();
+    d1.lignes.push({ id: "l1", abrev: "A", nom: "Ligne A", reseauId: null, activite: "Urbaine", mode: "Autobus", vehicules: [], energies: [], fonctions: [] });
+    const d2 = JSON.parse(JSON.stringify(d1)); // copie profonde, comme la duplication réelle
+    d2.lignes[0].nom = "Modifié dans la copie";
+    assert(d1.lignes[0].nom === "Ligne A", "L'original ne doit jamais être modifié par la copie");
+  });
+
+  // Affichage du rapport de tests.
+  const ok = results.filter(r => r.ok).length;
+  const rapport = h(`<div>
+    <h2>🧪 Tests automatiques — ${ok}/${results.length} réussis</h2>
+    ${results.map(r => `<div class="carte" style="margin:6px 0;padding:8px 14px;">
+      <span class="${r.ok ? "tests-ok" : "tests-ko"}">${r.ok ? "✅" : "❌"} ${esc(r.nom)}</span>
+      ${r.msg ? `<div class="erreur">${esc(r.msg)}</div>` : ""}</div>`).join("")}
+    <p class="info-txt">Ces tests vérifient les règles métier du noyau. Relancez-les après chaque modification :
+    si un test échoue, la fonctionnalité correspondante a régressé.</p>
+    <div class="ligne-boutons"><button id="m-fermer" class="b-bleu">Fermer</button></div>
+  </div>`);
+  rapport.querySelector("#m-fermer").onclick = () => rapport.closest(".modal-fond").remove();
+  modal(rapport);
+}
+
+/* ============ Démarrage ============ */
+BD.charger();
+rafraichir();
+</script>
+</body>
+</html>
