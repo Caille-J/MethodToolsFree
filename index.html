@@ -59,6 +59,12 @@
   .vue-switch button.actif { background: #e0f2fe; color: #075985; font-weight: 600; }
   .erreur { color: #dc2626; font-size: 13px; margin-top: 4px; }
   .inline-flex { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  /* Catalogue : couleurs d'origine des labels (légende affichée dans la vue). */
+  .pastille { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+  .pastille.std { background: #0284c7; }
+  .pastille.loc { background: #d97706; }
+  td.cell-std { background: #e0f2fe; }
+  td.cell-loc { background: #fef3c7; }
 </style>
 </head>
 <body>
@@ -83,15 +89,29 @@ const Noyau = (() => {
   const instanceNeuve = () => ({
     reseaux: [],   // [{id, nom, validiteDebut, validiteFin}]
     contrats: [],  // [{id, nom, reseaux:[ids], prive:true}]
-    lignes: [],    // [{id, abrev, nom, reseauId, contratId, activite, mode, vehicules:[], energies:[], fonctions:[]}]
+    lignes: [],    // [{id, abrev, nom, reseauId, contratId, activite, mode, groupe, vehicules:[], energies:[], fonctions:[]}]
+    /* Le catalogue : un « classeur » dont chaque catégorie est un onglet.
+       - labels : [{nom, origine: "standard"|"local", codes: {export: "3"}}]
+         "standard" = issu des référentiels GTFS/NeTEx (bleu) ;
+         "local" = ajouté ou modifié par l'utilisateur (orange).
+       - colonnes : colonnes de codes d'export, remplies par l'utilisateur. */
     catalogue: {
-      "Activités": ["Urbaine", "Régulière (interurbaine)", "Scolaire", "À la demande", "Navette"],
-      "Modes de transport": ["Autobus", "Autocar", "Tramway", "Trolleybus"],
-      "Types de véhicule": ["Bus standard 12 m", "Bus articulé 18 m", "Car 13 m", "Minibus"],
-      "Types d'énergie": ["Gasoil", "HVO", "Électrique", "GNV", "Hybride"],
-      "Fonctions embarquées": ["Wi-Fi", "PMR", "Emport vélo", "Prise USB", "Écran info voyageurs"]
+      "Activités": catNeuve(["Urbaine", "Régulière (interurbaine)", "Scolaire", "À la demande", "Navette"]),
+      "Modes de transport": catNeuve([["Tramway", "0"], ["Métro", "1"], ["Autobus", "3"], ["Autocar", "3"], ["Trolleybus", "11"]],
+        v => ({ nom: v[0], origine: "standard", codes: { export: v[1] } })),
+      "Types de véhicule": catNeuve(["Bus standard 12 m", "Bus articulé 18 m", "Car 13 m", "Minibus"]),
+      "Types d'énergie": catNeuve(["Gasoil", "HVO", "Électrique", "GNV", "Hybride"]),
+      "Fonctions embarquées": catNeuve(["Wi-Fi", "PMR", "Emport vélo", "Prise USB", "Écran info voyageurs"]),
+      "Groupes de lignes": catNeuve([])   // sert au network_id des exports GTFS/NeTEx
     },
+    colonnesCalculees: [], // colonnes compteur définies par l'utilisateur (onglet dédié)
     compteur: 1 // générateur d'identifiants locaux à l'instance
+  });
+
+  /* Fabrique une catégorie du catalogue : liste de labels + colonne d'export. */
+  const catNeuve = (valeurs, vers) => ({
+    colonnes: ["export"],
+    labels: valeurs.map(vers || (v => ({ nom: v, origine: "standard", codes: {} })))
   });
 
   const nouvelId = (data) => "o" + (data.compteur++);
@@ -110,24 +130,122 @@ const Noyau = (() => {
     return errs;
   }
 
-  /* Catalogue : ajout (doublons refusés), modification, suppression. */
-  function ajouterLabel(data, categorie, valeur) {
+  /* Catalogue : ajout (doublons refusés), modification, suppression.
+     origine "standard" (référentiel GTFS/NeTEx, couleur bleue) ou
+     "local" (ajouté/modifié par l'utilisateur, couleur orange). */
+  function ajouterLabel(data, categorie, valeur, origine) {
     const v = (valeur || "").trim();
+    const cat = data.catalogue[categorie];
     if (!v) return { ok: false, erreur: "Label vide." };
-    if (data.catalogue[categorie].some(x => x.toLowerCase() === v.toLowerCase()))
+    if (cat.labels.some(x => x.nom.toLowerCase() === v.toLowerCase()))
       return { ok: false, erreur: "Ce label existe déjà." };
-    data.catalogue[categorie] = [...data.catalogue[categorie], v];
+    cat.labels.push({ nom: v, origine: origine || "local", codes: {} });
     return { ok: true };
   }
   function modifierLabel(data, categorie, index, valeur) {
     const v = (valeur || "").trim();
     if (!v) return { ok: false, erreur: "Label vide." };
-    data.catalogue[categorie] = data.catalogue[categorie].map((x, i) => i === index ? v : x);
+    const l = data.catalogue[categorie].labels[index];
+    const ancien = l.nom;
+    l.nom = v;
+    l.origine = "local"; // un label modifié par l'utilisateur passe en orange
+    // Répercussion : les lignes qui utilisaient l'ancien nom suivent le
+    // renommage (sinon elles pointeraient vers un label qui n'existe plus).
+    renommerDansLignes(data, categorie, ancien, v);
     return { ok: true };
   }
   function supprimerLabel(data, categorie, index) {
-    data.catalogue[categorie] = data.catalogue[categorie].filter((_, i) => i !== index);
+    const l = data.catalogue[categorie].labels[index];
+    if (!l) return { ok: false, erreur: "Label introuvable." };
+    // Règle métier (Jules) : un label UTILISÉ par des lignes ne se supprime pas.
+    const usages = usagesLabel(data, categorie, l.nom);
+    if (usages.length)
+      return { ok: false, erreur: `Impossible : utilisé par ${usages.length} ligne(s) — ${usages.slice(0, 3).map(x => x.abrev).join(", ")}${usages.length > 3 ? "…" : ""}. Détachez-le d'abord (bouton 🔎).` };
+    data.catalogue[categorie].labels.splice(index, 1);
     return { ok: true };
+  }
+
+  /* ---- Cartographie des usages (demande de Jules : « où est-ce utilisé ? »)
+     Chaque catégorie du catalogue alimente un champ des lignes. */
+  const USAGES_CATALOGUE = {
+    "Activités":            { prop: "activite" },
+    "Modes de transport":   { prop: "mode" },
+    "Groupes de lignes":    { prop: "groupe" },
+    "Types de véhicule":    { prop: "vehicules", multiple: true },
+    "Types d'énergie":      { prop: "energies", multiple: true },
+    "Fonctions embarquées": { prop: "fonctions", multiple: true }
+  };
+  /* Les lignes qui utilisent ce label du catalogue. */
+  function usagesLabel(data, categorie, nom) {
+    const u = USAGES_CATALOGUE[categorie];
+    if (!u) return [];
+    const memeNom = v => (v || "").toLowerCase() === nom.toLowerCase();
+    return data.lignes.filter(l => u.multiple ? (l[u.prop] || []).some(memeNom) : memeNom(l[u.prop]));
+  }
+  /* Renomme un label dans toutes les lignes qui l'utilisent. */
+  function renommerDansLignes(data, categorie, ancien, nouveau) {
+    const u = USAGES_CATALOGUE[categorie];
+    if (!u) return;
+    data.lignes.forEach(l => {
+      if (u.multiple) l[u.prop] = (l[u.prop] || []).map(x => x.toLowerCase() === ancien.toLowerCase() ? nouveau : x);
+      else if ((l[u.prop] || "").toLowerCase() === ancien.toLowerCase()) l[u.prop] = nouveau;
+    });
+  }
+
+  /* ---- Règles d'unicité et usages des réseaux / contrats ---- */
+  /* Un nom identifie un objet : deux réseaux (ou deux contrats) de même
+     nom sont interdits — c'est le « code unique » au niveau réseau/contrat. */
+  function nomUtilise(liste, nom, ignoreId) {
+    return liste.some(x => x.id !== ignoreId && x.nom.trim().toLowerCase() === nom.trim().toLowerCase());
+  }
+  function usagesReseau(data, id) {
+    return {
+      lignes: data.lignes.filter(l => l.reseauId === id),
+      contrats: data.contrats.filter(c => (c.reseaux || []).includes(id))
+    };
+  }
+  function usagesContrat(data, id) {
+    return { lignes: data.lignes.filter(l => l.contratId === id) };
+  }
+  /* Doublons de codes d'export dans une catégorie : chaque code doit être
+     unique (il identifiera le label dans les exports GTFS/NeTEx). */
+  function doublonsCodes(data, categorie, colonne) {
+    const vus = new Set(), doublons = new Set();
+    data.catalogue[categorie].labels.forEach(l => {
+      const c = (l.codes[colonne] || "").trim();
+      if (c && vus.has(c)) doublons.add(c);
+      vus.add(c);
+    });
+    return [...doublons];
+  }
+  /* Valeur d'une colonne calculée utilisateur (testée par la suite). */
+  function valeurColCalculee(ligne, def) { return (ligne[def.cible] || []).length; }
+
+  /* Référentiel des standards (aligné GTFS / NeTEx). Le bouton « Mettre à
+     jour » de la vue Catalogue ajoute automatiquement les valeurs manquantes,
+     marquées "standard" (bleu), avec leur code GTFS pré-rempli quand il
+     existe (ex. route_type des modes de transport). Structure prête à être
+     alimentée plus tard par une API : il suffit d'enrichir ce référentiel. */
+  const REFERENTIEL = {
+    "Activités": [["Navette nocturne", ""], ["Transport de substitution", ""]],
+    "Modes de transport": [["Train / RER", "2"], ["Ferry / bateau", "4"], ["Téléphérique", "6"], ["Funiculaire", "7"]],
+    "Types de véhicule": [["Midibus", ""], ["Bus bi-articulé 24 m", ""], ["Autocar double étage", ""]],
+    "Types d'énergie": [["Hydrogène", ""], ["BioGNV", ""], ["Électrique batterie", ""]],
+    "Fonctions embarquées": [["Climatisation", ""], ["Validation sans contact", ""], ["Bandeau lumineux extérieur", ""], ["Annonces sonores", ""]],
+    "Groupes de lignes": []
+  };
+  function majReferentiel(data) {
+    let ajoutes = 0;
+    Object.entries(REFERENTIEL).forEach(([categorie, valeurs]) => {
+      valeurs.forEach(([v, code]) => {
+        const r = ajouterLabel(data, categorie, v, "standard");
+        if (r.ok) {
+          if (code) data.catalogue[categorie].labels[data.catalogue[categorie].labels.length - 1].codes["export"] = code;
+          ajoutes++;
+        }
+      });
+    });
+    return { ajoutes };
   }
 
   /* Modification en masse : parse du texte collé depuis Excel.
@@ -175,7 +293,8 @@ const Noyau = (() => {
     return [entetes, ...corps].join("\n");
   }
 
-  return { instanceNeuve, nouvelId, validerLigne, ajouterLabel, modifierLabel, supprimerLabel, appliquerColle, exporterTSV };
+  return { instanceNeuve, nouvelId, validerLigne, ajouterLabel, modifierLabel, supprimerLabel, appliquerColle, exporterTSV, majReferentiel,
+           usagesLabel, renommerDansLignes, nomUtilise, usagesReseau, usagesContrat, doublonsCodes, valeurColCalculee };
 })();
 
 /* ============ 2. BD : persistance locale ============ */
@@ -186,7 +305,25 @@ const BD = (() => {
   function charger() {
     try { etat = JSON.parse(localStorage.getItem(CLE)) || null; } catch (e) { etat = null; }
     if (!etat) etat = { utilisateurs: [], session: null, instances: [], donnees: {} };
+    migrer(etat);
     return etat;
+  }
+  /* Migration : met à jour les données existantes vers le format actuel.
+     Le catalogue a évolué (listes de textes → classeurs avec codes d'export
+     et origine des labels). Sans cette étape, des données sauvegardées avec
+     une version précédente deviendraient illisibles : la compatibilité
+     ascendante est la règle d'or des mises à jour. */
+  function migrer(e) {
+    Object.values(e.donnees || {}).forEach(d => {
+      if (d.catalogue) Object.entries(d.catalogue).forEach(([categorie, val]) => {
+        if (Array.isArray(val)) // ancien format : simple liste de textes
+          d.catalogue[categorie] = { colonnes: ["export"], labels: val.map(v => ({ nom: v, origine: "standard", codes: {} })) };
+      });
+      if (d.catalogue && !d.catalogue["Groupes de lignes"])
+        d.catalogue["Groupes de lignes"] = { colonnes: ["export"], labels: [] };
+      if (!d.colonnesCalculees) d.colonnesCalculees = [];
+      (d.lignes || []).forEach(l => { if (l.groupe === undefined) l.groupe = ""; });
+    });
   }
   function sauver() { localStorage.setItem(CLE, JSON.stringify(etat)); }
   function lire() { if (!etat) charger(); return etat; }
@@ -254,7 +391,11 @@ const BD = (() => {
   }
   function modifierInstance(id, nom, desc) {
     const e = lire(); const i = e.instances.find(x => x.id === id); if (!i) return { ok: false, erreur: "Introuvable." };
-    i.nom = nom.trim(); i.desc = (desc || "").trim(); sauver(); return { ok: true };
+    // Bornage identique à la création (le maxlength HTML protège la saisie,
+    // cette vérification protège l'application elle-même).
+    i.nom = nom.trim().slice(0, LIMITES.nomInstance);
+    i.desc = (desc || "").trim().slice(0, LIMITES.descInstance);
+    sauver(); return { ok: true };
   }
   function supprimerInstance(id) {
     const e = lire();
@@ -262,6 +403,9 @@ const BD = (() => {
     delete e.donnees[id]; sauver();
   }
   function donneesInstance(id) { return lire().donnees[id]; }
+  /* Remise à zéro interne (uniquement pour la suite de tests : simule un
+     rechargement de page en vidant le cache mémoire de la base). */
+  function _raz() { etat = null; }
 
   /* Droits (V1 : affectation d'utilisateurs à une instance ; les rôles
      détaillés seront définis dans une version ultérieure). */
@@ -278,7 +422,7 @@ const BD = (() => {
     sauver(); return { ok: true };
   }
 
-  return { charger, lire, sauver, inscrire, connecter, deconnecter, utilisateurCourant,
+  return { charger, lire, sauver, inscrire, connecter, deconnecter, utilisateurCourant, _raz,
            mesInstances, creerInstance, dupliquerInstance, modifierInstance, supprimerInstance,
            donneesInstance, affecterMembre, retirerMembre };
 })();
@@ -371,6 +515,36 @@ function modal(contenu) {
   return fond;
 }
 
+/* Fenêtre « où est-il utilisé ? » (demande de Jules) : liste les éléments
+   qui utilisent un objet, UN PAR UN, chacun modifiable ou supprimable
+   directement depuis la liste. */
+function modalUsages(titre, obtenirUsages) {
+  const form = h(`<div>
+    <h2>🔎 Utilisations — ${esc(titre)}</h2>
+    <div id="u-liste"></div>
+    <div class="ligne-boutons"><button id="m-fermer" class="b-bleu">Fermer</button></div>
+  </div>`);
+  const box = form.querySelector("#u-liste");
+  const dessiner = () => {
+    box.innerHTML = "";
+    const usages = obtenirUsages();
+    if (!usages.length) { box.appendChild(h(`<p class="info-txt">Aucune utilisation.</p>`)); return; }
+    usages.forEach(u => {
+      const carte = h(`<div class="carte" style="margin:6px 0;padding:8px 14px;">
+        <span>${u.label()}</span><span class="inline-flex"></span></div>`);
+      const act = carte.lastElementChild;
+      const bM = h(`<button>Modifier</button>`);
+      bM.onclick = () => { form.closest(".modal-fond").remove(); u.modifier(); };
+      act.appendChild(bM);
+      act.appendChild(boutonSupprimer("Supprimer", () => { u.supprimer(); BD.sauver(); dessiner(); }));
+      box.appendChild(carte);
+    });
+  };
+  form.querySelector("#m-fermer").onclick = () => form.closest(".modal-fond").remove();
+  dessiner();
+  modal(form);
+}
+
 /* ---------- Écran accueil : liste des instances ---------- */
 function vueAccueil(u) {
   const insts = BD.mesInstances();
@@ -454,7 +628,7 @@ function vueAccueil(u) {
       const form = h(`<div>
         <h2>Dupliquer « ${esc(inst.nom)} »</h2>
         <p class="info-txt">La copie reprendra toutes les données. Ajustez le nom et la description.</p>
-        <div class="champ"><label>Nom</label><input id="m-nom" maxlength="32" value="${esc(inst.nom).slice(0, 26)} (copie)" /></div>
+        <div class="champ"><label>Nom</label><input id="m-nom" maxlength="32" value="${esc(inst.nom.slice(0, LIMITES.nomInstance - 8))} (copie)" /></div>
         <div class="champ"><label>Description</label><textarea id="m-desc" rows="2" maxlength="256">${esc(inst.desc)}</textarea></div>
         <div class="erreur" id="m-err"></div>
         <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-vert">Dupliquer</button></div>
@@ -469,13 +643,23 @@ function vueAccueil(u) {
     };
     const bMod = h(`<button>Modifier</button>`);
     bMod.onclick = () => {
+      // Modifier : mêmes garde-fous que la création (limites + compteurs).
       const form = h(`<div>
         <h2>Modifier l'instance</h2>
-        <div class="champ"><label>Nom</label><input id="m-nom" value="${esc(inst.nom)}" /></div>
-        <div class="champ"><label>Description</label><textarea id="m-desc" rows="2">${esc(inst.desc)}</textarea></div>
+        <div class="champ"><label>Nom (32 caractères max.)</label>
+          <input id="m-nom" maxlength="32" value="${esc(inst.nom)}"/><div class="info-txt" id="cpt-nom"></div></div>
+        <div class="champ"><label>Description (256 caractères max.)</label>
+          <textarea id="m-desc" rows="2" maxlength="256">${esc(inst.desc)}</textarea><div class="info-txt" id="cpt-desc"></div></div>
         <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-bleu">Enregistrer</button></div>
       </div>`);
       modal(form);
+      const majCompteur = () => {
+        form.querySelector("#cpt-nom").textContent = `${form.querySelector("#m-nom").value.length} / 32`;
+        form.querySelector("#cpt-desc").textContent = `${form.querySelector("#m-desc").value.length} / 256`;
+      };
+      form.querySelector("#m-nom").addEventListener("input", majCompteur);
+      form.querySelector("#m-desc").addEventListener("input", majCompteur);
+      majCompteur();
       form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
       form.querySelector("#m-ok").onclick = () => {
         const r = BD.modifierInstance(inst.id, form.querySelector("#m-nom").value, form.querySelector("#m-desc").value);
@@ -563,20 +747,36 @@ function vueEspaceTravail(u) {
 /* ---------- Vue : toutes les lignes (tableau paramétrable) ---------- */
 /* Les colonnes calculées ("auto") ne stockent rien : leur valeur est
    dérivée à la volée. Les préférences de colonnes sont mémorisées par instance. */
+/* Colonnes de base du tableau des lignes.
+   - "id" est FIXE : toujours affichée, non décochable (identifiant unique
+     calculé par l'instance, servira de clé aux exports GTFS/NeTEx).
+   - Les colonnes calculées définies par l'utilisateur (onglet dédié du
+     catalogue) s'ajoutent dynamiquement : voir colonnesDisponibles(). */
 const COLONNES = [
+  { cle: "id", label: "ID unique", fixe: true },
   { cle: "abrev", label: "Abrév." },
   { cle: "nom", label: "Nom commercial" },
   { cle: "reseau", label: "Réseau", join: "reseauId", src: "reseaux" },
   { cle: "contrat", label: "Contrat 🔒", join: "contratId", src: "contrats" },
   { cle: "activite", label: "Activité" },
   { cle: "mode", label: "Mode" },
+  { cle: "groupe", label: "Groupe (network_id)" },
   { cle: "nbVehicules", label: "Nb véhicules", calc: l => l.vehicules.length },
   { cle: "nbEnergies", label: "Nb énergies", calc: l => l.energies.length },
   { cle: "nbFonctions", label: "Nb fonctions", calc: l => l.fonctions.length },
 ];
+/* Toutes les colonnes disponibles = base + colonnes calculées utilisateur
+   (un compteur : nombre d'éléments d'une liste rattachée à la ligne). */
+function colonnesDisponibles() {
+  const d = BD.donneesInstance(App.instanceOuverte.id);
+  const calcU = (d.colonnesCalculees || []).map(c => ({
+    cle: "u:" + c.nom, label: c.nom, calc: l => Noyau.valeurColCalculee(l, c), utilisateur: true
+  }));
+  return [...COLONNES, ...calcU];
+}
 function colonnesAffichees() {
   const pref = localStorage.getItem("hastus_colonnes_" + App.instanceOuverte.id);
-  return pref ? JSON.parse(pref) : ["abrev", "nom", "reseau", "contrat", "activite", "mode", "nbVehicules"];
+  return pref ? JSON.parse(pref) : ["abrev", "nom", "reseau", "contrat", "activite", "mode", "groupe", "nbVehicules"];
 }
 function valColonne(d, col, l) {
   if (col.calc) return col.calc(l);
@@ -587,7 +787,10 @@ function valColonne(d, col, l) {
 function vueLignes() {
   const d = BD.donneesInstance(App.instanceOuverte.id);
   if (!App.colonnes) App.colonnes = colonnesAffichees();
-  const cols = COLONNES.filter(c => App.colonnes.includes(c.cle));
+  // Ordre d'affichage = ordre choisi par l'utilisateur (menu ⚙ Colonnes),
+  // avec la colonne fixe « ID unique » toujours en tête.
+  const dispo = colonnesDisponibles();
+  const cols = ["id", ...App.colonnes].map(cle => dispo.find(c => c.cle === cle)).filter(Boolean);
   const racine = h(`<div>
     <div class="inline-flex" style="justify-content:space-between;width:100%;margin-bottom:12px;">
       <span class="info-txt">Toutes les lignes de cette instance.</span>
@@ -626,18 +829,54 @@ function vueLignes() {
   });
   racine.querySelector("#compte").textContent = `${d.lignes.length} ligne(s)`;
 
-  // Menu ⚙ Colonnes : cocher / décocher, mémorisé pour cette instance.
+  // Menu ⚙ Colonnes : cocher / décocher ET réordonner. Le panneau RESTE
+  // OUVERT tant qu'on n'a pas cliqué « Appliquer » : on peut sélectionner
+  // plusieurs colonnes d'affilée sans qu'il ne se referme à chaque clic.
+  // Mémorisé pour cette instance.
   const bCol = racine.querySelector("#b-col");
   bCol.onclick = () => {
     const ancien = racine.querySelector(".panneau");
     if (ancien) { ancien.remove(); return; }
-    const pan = h(`<div class="panneau">${COLONNES.map(c =>
-      `<label><input type="checkbox" value="${c.cle}" ${App.colonnes.includes(c.cle) ? "checked" : ""}/> ${c.label}</label>`).join("")}</div>`);
-    pan.querySelectorAll("input").forEach(inp => inp.onchange = () => {
-      App.colonnes = Array.from(pan.querySelectorAll("input:checked")).map(x => x.value);
+    // Ordre de travail : colonnes sélectionnées (ordre actuel), puis les autres.
+    let travail = [...App.colonnes];
+    dispo.forEach(c => { if (!c.fixe && !travail.includes(c.cle)) travail.push(c.cle); });
+    const cochees = new Set(App.colonnes);
+    const pan = h(`<div class="panneau" style="width:320px;">
+      <b style="font-size:13px;">Colonnes affichées</b>
+      <p class="info-txt" style="margin:2px 0 6px;">↑ ↓ pour réordonner. « Appliquer » enregistre.</p>
+      <div id="p-liste" style="max-height:300px;overflow-y:auto;"></div>
+      <div class="ligne-boutons" style="margin:6px 0 0;">
+        <button id="p-ann">✕ Fermer</button>
+        <button id="p-ok" class="b-bleu">Appliquer</button>
+      </div>
+    </div>`);
+    const dessiner = () => {
+      const box = pan.querySelector("#p-liste");
+      box.innerHTML = "";
+      travail.forEach((cle, i) => {
+        const col = dispo.find(c => c.cle === cle);
+        const l = h(`<label style="justify-content:space-between;">
+          <span style="display:inline-flex;align-items:center;gap:6px;">
+            <input type="checkbox" ${cochees.has(cle) || col.fixe ? "checked" : ""} ${col.fixe ? "disabled" : ""}/>
+            ${esc(col.label)}${col.fixe ? ' <span class="etiquette">fixe</span>' : ""}</span>
+          <span><button title="Monter" ${i === 0 ? "disabled" : ""}>↑</button>
+          <button title="Descendre" ${i === travail.length - 1 ? "disabled" : ""}>↓</button></span></label>`);
+        const cb = l.querySelector("input");
+        cb.onchange = () => cb.checked ? cochees.add(cle) : cochees.delete(cle);
+        const [haut, bas] = l.querySelectorAll("button");
+        haut.onclick = () => { travail.splice(i, 1); travail.splice(i - 1, 0, cle); dessiner(); };
+        bas.onclick = () => { travail.splice(i, 1); travail.splice(i + 1, 0, cle); dessiner(); };
+        box.appendChild(l);
+      });
+    };
+    dessiner();
+    pan.querySelector("#p-ann").onclick = () => pan.remove();
+    pan.querySelector("#p-ok").onclick = () => {
+      // L'ordre du panneau devient l'ordre d'affichage (hors colonne fixe).
+      App.colonnes = travail.filter(cle => cochees.has(cle));
       localStorage.setItem("hastus_colonnes_" + App.instanceOuverte.id, JSON.stringify(App.colonnes));
       rafraichir();
-    });
+    };
     bCol.parentElement.appendChild(pan);
   };
 
@@ -677,27 +916,32 @@ function vueLignes() {
 function modalLigne(idLigne) {
   const d = BD.donneesInstance(App.instanceOuverte.id);
   const existante = idLigne ? d.lignes.find(l => l.id === idLigne) : null;
-  const init = existante || { abrev: "", nom: "", reseauId: "", contratId: null, activite: "", mode: "", vehicules: [], energies: [], fonctions: [] };
+  const init = existante || { abrev: "", nom: "", reseauId: "", contratId: null, activite: "", mode: "", groupe: "", vehicules: [], energies: [], fonctions: [] };
   const cat = d.catalogue;
   // Générateur de blocs à choix multiples (véhicules / énergies / fonctions).
-  const casesMultiples = (titre, catCle, prop) => `<div class="champ"><label>${titre} (plusieurs)</label>
-    <div class="inline-flex">${cat[catCle].map(v =>
-      `<label class="libelle"><input type="checkbox" data-grp="${prop}" value="${esc(v)}" ${init[prop].includes(v) ? "checked" : ""}/> ${esc(v)}</label>`).join("")}</div></div>`;
+  const casesMultiples = (titre, catCle, prop) => `<div class="champ"><label>${titre} (plusieurs) <span class="etiquette pub">🚌 public</span></label>
+    <div class="inline-flex">${cat[catCle].labels.map(x =>
+      `<label class="libelle"><input type="checkbox" data-grp="${prop}" value="${esc(x.nom)}" ${init[prop].includes(x.nom) ? "checked" : ""}/> ${esc(x.nom)}</label>`).join("")}</div></div>`;
   const form = h(`<div>
     <h2>${existante ? "Modifier" : "Créer"} une ligne</h2>
     <div class="grille">
-      <div class="champ"><label>Abréviation</label><input id="m-abrev" value="${esc(init.abrev)}"/></div>
-      <div class="champ"><label>Nom commercial</label><input id="m-nom" value="${esc(init.nom)}"/></div>
-      <div class="champ"><label>Réseau</label><select id="m-reseau"><option value="">— Choisir —</option>
+      <!-- Mention public/privé portée par chaque champ (GTFS : abrev/short_name,
+           nom/long_name, mode = route_type, groupe = network_id). -->
+      <div class="champ"><label>Abréviation <span class="etiquette pub">🚌 public</span></label><input id="m-abrev" value="${esc(init.abrev)}"/></div>
+      <div class="champ"><label>Nom commercial <span class="etiquette pub">🚌 public</span></label><input id="m-nom" value="${esc(init.nom)}"/></div>
+      <div class="champ"><label>Réseau <span class="etiquette pub">🚌 public</span></label><select id="m-reseau"><option value="">— Choisir —</option>
         ${d.reseaux.map(r => `<option value="${r.id}" ${init.reseauId === r.id ? "selected" : ""}>${esc(r.nom)}</option>`).join("")}</select></div>
-      <div class="champ"><label>Contrat 🔒 (privé transporteur)</label><select id="m-contrat"><option value="">— Aucun —</option>
+      <div class="champ"><label>Contrat <span class="etiquette prive">🔒 privé transporteur</span></label><select id="m-contrat"><option value="">— Aucun —</option>
         ${d.contrats.map(c => `<option value="${c.id}" ${init.contratId === c.id ? "selected" : ""}>${esc(c.nom)}</option>`).join("")}</select></div>
       <div class="champ"><label>Activité (1 seule) <span class="etiquette pub">🚌 public</span></label>
         <select id="m-act"><option value="">— Choisir —</option>
-        ${cat["Activités"].map(a => `<option ${init.activite === a ? "selected" : ""}>${esc(a)}</option>`).join("")}</select></div>
-      <div class="champ"><label>Mode de transport (1 seul) <span class="etiquette pub">🚌 public</span></label>
+        ${cat["Activités"].labels.map(a => `<option ${init.activite === a.nom ? "selected" : ""}>${esc(a.nom)}</option>`).join("")}</select></div>
+      <div class="champ"><label>Mode de transport (1 seul) <span class="etiquette pub">🚌 public — route_type GTFS</span></label>
         <select id="m-mode"><option value="">— Choisir —</option>
-        ${cat["Modes de transport"].map(m => `<option ${init.mode === m ? "selected" : ""}>${esc(m)}</option>`).join("")}</select></div>
+        ${cat["Modes de transport"].labels.map(m => `<option ${init.mode === m.nom ? "selected" : ""}>${esc(m.nom)}</option>`).join("")}</select></div>
+      <div class="champ"><label>Groupe <span class="etiquette pub">🚌 public — network_id</span></label>
+        <select id="m-groupe"><option value="">— Aucun —</option>
+        ${cat["Groupes de lignes"].labels.map(g => `<option ${init.groupe === g.nom ? "selected" : ""}>${esc(g.nom)}</option>`).join("")}</select></div>
     </div>
     ${casesMultiples("Types de véhicule", "Types de véhicule", "vehicules")}
     ${casesMultiples("Types d'énergie", "Types d'énergie", "energies")}
@@ -716,6 +960,7 @@ function modalLigne(idLigne) {
       contratId: form.querySelector("#m-contrat").value || null,
       activite: form.querySelector("#m-act").value,
       mode: form.querySelector("#m-mode").value,
+      groupe: form.querySelector("#m-groupe").value,
       vehicules: Array.from(form.querySelectorAll('[data-grp="vehicules"]:checked')).map(x => x.value),
       energies: Array.from(form.querySelectorAll('[data-grp="energies"]:checked')).map(x => x.value),
       fonctions: Array.from(form.querySelectorAll('[data-grp="fonctions"]:checked')).map(x => x.value)
@@ -740,9 +985,9 @@ function vueReseauxContrats() {
     <div id="liste"></div>
   </div>`);
   const sw = racine.querySelector("#switch");
-  const bReseaux = h(`<button class="${App.vueObjet === "reseaux" ? "actif" : ""}">Vue par réseau</button>`);
+  const bReseaux = h(`<button class="${App.vueObjet === "reseaux" ? "actif" : ""}">Tous les réseaux</button>`);
   bReseaux.onclick = () => { App.vueObjet = "reseaux"; rafraichir(); };
-  const bContrats = h(`<button class="${App.vueObjet === "contrats" ? "actif" : ""}">Vue par contrat</button>`);
+  const bContrats = h(`<button class="${App.vueObjet === "contrats" ? "actif" : ""}">Tous les contrats</button>`);
   bContrats.onclick = () => { App.vueObjet = "contrats"; rafraichir(); };
   sw.appendChild(bReseaux); sw.appendChild(bContrats);
   const bCreer = racine.querySelector("#b-creer");
@@ -754,9 +999,12 @@ function vueReseauxContrats() {
     b.onclick = () => modalReseau(null);
     bCreer.appendChild(b);
     if (!d.reseaux.length) liste.appendChild(h(`<p class="info-txt">Aucun réseau. Créez-en un : il sera disponible pour rattacher des lignes.</p>`));
+    // Mention public/privé indiquée UNE fois en tête de vue (et non sur
+    // chaque carte) : les réseaux sont des objets publics.
+    liste.appendChild(h(`<p class="info-txt"><span class="etiquette pub">🚌 public</span> Les réseaux contiennent des informations <b>publiques</b> (visibles dans les exports).</p>`));
     d.reseaux.forEach(r => {
       const carte = h(`<div class="carte">
-        <div><b>${esc(r.nom)}</b> <span class="etiquette pub">🚌 public</span>
+        <div><b>${esc(r.nom)}</b>
           <div class="info-txt">Validité : ${esc(r.validiteDebut || "?")} → ${esc(r.validiteFin || "?")}</div></div>
         <span class="inline-flex">
           <span class="etiquette">${nbLignes(l => l.reseauId === r.id)} lignes</span>
@@ -766,11 +1014,33 @@ function vueReseauxContrats() {
       </div>`);
       const act = carte.lastElementChild;
       const bM = h(`<button>Modifier</button>`); bM.onclick = () => modalReseau(r.id); act.appendChild(bM);
-      // Sécurité : on ne supprime pas un réseau encore utilisé par des lignes.
+      // Règle métier (Jules) : un réseau utilisé par des lignes OU des
+      // contrats ne peut pas être supprimé.
       act.appendChild(boutonSupprimer("Supprimer", () => {
-        if (nbLignes(l => l.reseauId === r.id)) { alert("Impossible : des lignes sont rattachées à ce réseau."); return; }
+        const u = Noyau.usagesReseau(d, r.id);
+        if (u.lignes.length || u.contrats.length) {
+          alert(`Impossible : réseau utilisé par ${u.lignes.length} ligne(s) et ${u.contrats.length} contrat(s). Utilisez 🔎 pour voir et nettoyer les utilisations.`);
+          return;
+        }
         d.reseaux = d.reseaux.filter(x => x.id !== r.id); BD.sauver(); rafraichir();
       }));
+      const bUse = h(`<button title="Où est-il utilisé ?">🔎</button>`);
+      bUse.onclick = () => modalUsages(r.nom, () => {
+        const u = Noyau.usagesReseau(d, r.id);
+        return [
+          ...u.lignes.map(l => ({
+            label: () => `Ligne <b>${esc(l.abrev)}</b> — ${esc(l.nom)}`,
+            modifier: () => modalLigne(l.id),
+            supprimer: () => { d.lignes = d.lignes.filter(x => x.id !== l.id); }
+          })),
+          ...u.contrats.map(c => ({
+            label: () => `Contrat <b>${esc(c.nom)}</b>`,
+            modifier: () => modalContrat(c.id),
+            supprimer: () => { d.contrats = d.contrats.filter(x => x.id !== c.id); }
+          }))
+        ];
+      });
+      act.appendChild(bUse);
       liste.appendChild(carte);
     });
   } else {
@@ -778,18 +1048,32 @@ function vueReseauxContrats() {
     b.onclick = () => modalContrat(null);
     bCreer.appendChild(b);
     if (!d.contrats.length) liste.appendChild(h(`<p class="info-txt">Aucun contrat. Les contrats sont des objets privés transporteur.</p>`));
+    // Mention indiquée UNE fois en tête de vue : les contrats sont privés.
+    liste.appendChild(h(`<p class="info-txt"><span class="etiquette prive">🔒 privé transporteur</span> Les contrats contiennent des informations <b>privées</b> (jamais exportées).</p>`));
     d.contrats.forEach(c => {
       const carte = h(`<div class="carte">
-        <div><b>${esc(c.nom)}</b> <span class="etiquette prive">🔒 Privé transporteur</span>
+        <div><b>${esc(c.nom)}</b>
           <div class="info-txt">Réseaux : ${d.reseaux.filter(r => (c.reseaux || []).includes(r.id)).map(r => esc(r.nom)).join(", ") || "—"}</div></div>
         <span class="inline-flex"><span class="etiquette">${nbLignes(l => l.contratId === c.id)} lignes</span></span>
         <span class="inline-flex"></span>
       </div>`);
       const act = carte.lastElementChild;
       const bM = h(`<button>Modifier</button>`); bM.onclick = () => modalContrat(c.id); act.appendChild(bM);
+      // Règle métier (Jules) : un contrat utilisé par des lignes ne peut
+      // pas être supprimé.
       act.appendChild(boutonSupprimer("Supprimer", () => {
+        const u = Noyau.usagesContrat(d, c.id);
+        if (u.lignes.length) { alert(`Impossible : contrat utilisé par ${u.lignes.length} ligne(s). Utilisez 🔎 pour voir et nettoyer les utilisations.`); return; }
         d.contrats = d.contrats.filter(x => x.id !== c.id); BD.sauver(); rafraichir();
       }));
+      const bUse = h(`<button title="Où est-il utilisé ?">🔎</button>`);
+      bUse.onclick = () => modalUsages(c.nom, () =>
+        Noyau.usagesContrat(d, c.id).lignes.map(l => ({
+          label: () => `Ligne <b>${esc(l.abrev)}</b> — ${esc(l.nom)}`,
+          modifier: () => modalLigne(l.id),
+          supprimer: () => { d.lignes = d.lignes.filter(x => x.id !== l.id); }
+        })));
+      act.appendChild(bUse);
       liste.appendChild(carte);
     });
   }
@@ -818,6 +1102,8 @@ function modalReseau(idReseau) {
     if (!nom) { form.querySelector("#m-err").textContent = "Nom obligatoire."; return; }
     if (deb && fin && deb > fin) { form.querySelector("#m-err").textContent = "La fin de validité doit suivre le début."; return; }
     if (fin && fin > "2099-12-31") { form.querySelector("#m-err").textContent = "La validité ne peut dépasser 2099."; return; }
+    // Règle d'unicité (Jules) : deux réseaux ne peuvent pas porter le même nom.
+    if (Noyau.nomUtilise(d.reseaux, nom, r ? r.id : null)) { form.querySelector("#m-err").textContent = "Un réseau porte déjà ce nom (le nom est un code unique)."; return; }
     if (r) { r.nom = nom; r.validiteDebut = deb; r.validiteFin = fin; }
     else d.reseaux.push({ id: Noyau.nouvelId(d), nom, validiteDebut: deb, validiteFin: fin });
     BD.sauver(); form.closest(".modal-fond").remove(); rafraichir();
@@ -842,6 +1128,8 @@ function modalContrat(idContrat) {
   form.querySelector("#m-ok").onclick = () => {
     const nom = form.querySelector("#m-nom").value.trim();
     if (!nom) { form.querySelector("#m-err").textContent = "Nom obligatoire."; return; }
+    // Règle d'unicité (Jules) : deux contrats ne peuvent pas porter le même nom.
+    if (Noyau.nomUtilise(d.contrats, nom, c ? c.id : null)) { form.querySelector("#m-err").textContent = "Un contrat porte déjà ce nom (le nom est un code unique)."; return; }
     const reseaux = Array.from(form.querySelectorAll('input[type="checkbox"]:checked')).map(x => x.value);
     if (c) { c.nom = nom; c.reseaux = reseaux; }
     else d.contrats.push({ id: Noyau.nouvelId(d), nom, reseaux });
@@ -849,37 +1137,181 @@ function modalContrat(idContrat) {
   };
 }
 
-/* ---------- Vue : catalogue de l'instance ---------- */
+/* ---------- Vue : catalogue de l'instance (classeur à onglets) ---------- */
+/* Chaque catégorie = un onglet du classeur. L'onglet affiche un TABLEAU :
+   - colonne « Label » (fond coloré selon l'origine, cf. légende),
+   - colonnes d'export remplies par l'utilisateur (codes des futurs exports),
+   - actions : modifier ✎ / supprimer ✕, plus « + Ajouter un label ».
+   Un onglet supplémentaire « Colonnes calculées » définit les compteurs
+   du tableau « Toutes les lignes ». */
+App.vueCat = "Activités";
 function vueCatalogue() {
   const d = BD.donneesInstance(App.instanceOuverte.id);
-  const racine = h(`<div><p class="info-txt">Listes de référence de l'instance (alignées NeTEx/GTFS).
-    Ajoutez, modifiez ou supprimez des labels : les formulaires en héritent.</p><div id="cats"></div></div>`);
-  const cats = racine.querySelector("#cats");
-  Object.entries(d.catalogue).forEach(([cat, valeurs]) => {
-    const carte = h(`<div class="carte" style="display:block;">
-      <b>${esc(cat)}</b><div class="inline-flex" style="margin-top:8px;"></div>
-    </div>`);
-    const box = carte.lastElementChild;
-    valeurs.forEach((v, i) => {
-      const lib = h(`<span class="libelle">${esc(v)}</span>`);
-      const bMod = h(`<button title="Modifier">✎</button>`);
+  const cats = [...Object.keys(d.catalogue), "Colonnes calculées"];
+  if (!App.vueCat || !cats.includes(App.vueCat)) App.vueCat = cats[0];
+  const racine = h(`<div>
+    <div class="inline-flex" style="justify-content:space-between;width:100%;">
+      <span class="info-txt">Listes de référence de l'instance, alignées sur les standards NeTEx / GTFS.<br/>
+        <b>Légende :</b> <span class="pastille std"></span> issu des standards (ou ajouté par la mise à jour) ·
+        <span class="pastille loc"></span> ajouté ou modifié par vous.</span>
+      <button id="maj-ref" class="b-vert" title="Ajoute les valeurs des standards manquantes">🔄 Mettre à jour depuis les standards</button>
+    </div>
+    <div class="onglets" id="onglets-cat" style="margin:10px 0;flex-wrap:wrap;"></div>
+    <div id="contenu-cat"></div>
+  </div>`);
+  const ongletsBox = racine.querySelector("#onglets-cat");
+  cats.forEach(cat => {
+    const b = h(`<button class="onglet ${App.vueCat === cat ? "actif" : ""}">${esc(cat)}</button>`);
+    b.onclick = () => { App.vueCat = cat; rafraichir(); };
+    ongletsBox.appendChild(b);
+  });
+  // Mise à jour : ajoute les valeurs du référentiel GTFS/NeTEx absentes
+  // du catalogue, marquées « standard » (bleu). Le référentiel est embarqué
+  // (les vocabulaires GTFS sont stables) et prêt à être enrichi par une API.
+  racine.querySelector("#maj-ref").onclick = () => {
+    const res = Noyau.majReferentiel(d);
+    BD.sauver(); rafraichir();
+    alert(res.ajoutes === 0
+      ? "Catalogue déjà à jour : aucune valeur des standards ne manque."
+      : `${res.ajoutes} label(s) ajouté(s) depuis les standards GTFS/NeTEx (en bleu).`);
+  };
+  const box = racine.querySelector("#contenu-cat");
+  if (App.vueCat === "Colonnes calculées") box.appendChild(vueColonnesCalculees(d));
+  else box.appendChild(vueOngletCatalogue(d, App.vueCat));
+  return racine;
+}
+
+/* Un onglet du classeur : le tableau des labels d'une catégorie. */
+function vueOngletCatalogue(d, categorie) {
+  const cat = d.catalogue[categorie];
+  const racine = h(`<div>
+    <div class="enveloppe-table"><table>
+      <thead><tr><th>Label</th>${cat.colonnes.map(c => `<th>${esc(c)}</th>`).join("")}<th style="text-align:right;">Actions</th></tr></thead>
+      <tbody id="c-corps"></tbody>
+    </table></div>
+    <div class="inline-flex" style="margin-top:10px;">
+      <button id="c-add" class="b-bleu">+ Ajouter un label</button>
+      <button id="c-col">+ Ajouter une colonne d'export</button>
+    </div>
+  </div>`);
+  const corps = racine.querySelector("#c-corps");
+  const dessiner = () => {
+    corps.innerHTML = "";
+    cat.labels.forEach((lab, i) => {
+      // Fond du label selon l'origine : bleu = standard, orange = utilisateur.
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td class="cell-${lab.origine === "standard" ? "std" : "loc"}">${esc(lab.nom)}</td>`
+        + cat.colonnes.map(c => `<td><input data-code="${esc(c)}" data-i="${i}" value="${esc(lab.codes[c] || "")}" style="padding:3px 6px;font-size:12px;" placeholder="code…"/></td>`).join("")
+        + `<td style="text-align:right;"></td>`;
+      // Codes d'export : saisie directe dans la cellule, enregistrée au
+      // change — avec règle d'unicité : deux labels d'une même catégorie
+      // ne peuvent pas porter le même code (il les identifiera à l'export).
+      tr.querySelectorAll("input[data-code]").forEach(inp => {
+        inp.onchange = () => {
+          const val = inp.value.trim();
+          const dejaPris = cat.labels.some((x, j) => j !== i &&
+            (x.codes[inp.dataset.code] || "").trim().toLowerCase() === val.toLowerCase());
+          if (val && dejaPris) {
+            alert("Ce code est déjà utilisé par un autre label de cette catégorie : chaque code doit être unique.");
+            inp.value = lab.codes[inp.dataset.code] || "";
+            return;
+          }
+          lab.codes[inp.dataset.code] = val; BD.sauver();
+        };
+      });
+      const actions = tr.lastElementChild;
+      const bMod = h(`<button title="Modifier le label">✎</button>`);
       bMod.onclick = () => {
-        const nv = prompt("Modifier le label :", v);
-        if (nv !== null) { const r = Noyau.modifierLabel(d, cat, i, nv); if (!r.ok) alert(r.erreur); else { BD.sauver(); rafraichir(); } }
+        const nv = prompt("Modifier le label :", lab.nom);
+        if (nv !== null) { const r = Noyau.modifierLabel(d, categorie, i, nv); if (!r.ok) alert(r.erreur); else { BD.sauver(); dessiner(); } }
       };
       const bSup = h(`<button title="Supprimer">✕</button>`);
-      bSup.onclick = () => { Noyau.supprimerLabel(d, cat, i); BD.sauver(); rafraichir(); };
-      lib.appendChild(bMod); lib.appendChild(bSup);
-      box.appendChild(lib);
+      bSup.onclick = () => {
+        // Règle métier (Jules) : la suppression est refusée si le label est
+        // utilisé par au moins une ligne (le message indique lesquelles).
+        const r = Noyau.supprimerLabel(d, categorie, i);
+        if (!r.ok) { alert(r.erreur); return; }
+        BD.sauver(); dessiner();
+      };
+      const bUse = h(`<button title="Où est-il utilisé ?">🔎</button>`);
+      bUse.onclick = () => modalUsages(lab.nom, () =>
+        Noyau.usagesLabel(d, categorie, lab.nom).map(l => ({
+          label: () => `Ligne <b>${esc(l.abrev)}</b> — ${esc(l.nom)}`,
+          modifier: () => modalLigne(l.id),
+          supprimer: () => { d.lignes = d.lignes.filter(x => x.id !== l.id); }
+        })));
+      actions.appendChild(bMod); actions.appendChild(bSup); actions.appendChild(bUse);
+      corps.appendChild(tr);
     });
-    const bAdd = h(`<button class="libelle" style="border-style:dashed;color:#64748b;">+ Ajouter…</button>`);
-    bAdd.onclick = () => {
-      const nv = prompt("Nouveau label (s'ajoute à la liste) :");
-      if (nv) { const r = Noyau.ajouterLabel(d, cat, nv); if (!r.ok) alert(r.erreur); else { BD.sauver(); rafraichir(); } }
+    if (!cat.labels.length) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td colspan="${cat.colonnes.length + 2}" style="text-align:center;color:#64748b;">Aucun label — ajoutez-en ou lancez la mise à jour des standards.</td>`;
+      corps.appendChild(tr);
+    }
+  };
+  dessiner();
+  racine.querySelector("#c-add").onclick = () => {
+    const nv = prompt("Nouveau label (s'ajoute à la liste) :");
+    if (nv) { const r = Noyau.ajouterLabel(d, categorie, nv, "local"); if (!r.ok) alert(r.erreur); else { BD.sauver(); dessiner(); } }
+  };
+  racine.querySelector("#c-col").onclick = () => {
+    const nv = (prompt("Nom de la nouvelle colonne d'export :", "export") || "").trim();
+    if (!nv) return;
+    if (cat.colonnes.includes(nv)) { alert("Cette colonne existe déjà."); return; }
+    cat.colonnes.push(nv);
+    BD.sauver(); rafraichir();
+  };
+  return racine;
+}
+
+/* Onglet « Colonnes calculées » : définit les compteurs disponibles
+   dans le menu ⚙ Colonnes du tableau « Toutes les lignes ». */
+const CIBLES = [["vehicules", "types de véhicule"], ["energies", "types d'énergie"], ["fonctions", "fonctions embarquées"]];
+function vueColonnesCalculees(d) {
+  const racine = h(`<div>
+    <p class="info-txt">Une colonne calculée compte, pour chaque ligne, le nombre d'éléments cochés dans une liste.
+      Elle apparaît ensuite dans le tableau « Toutes les lignes » via le menu ⚙ Colonnes.</p>
+    <div class="enveloppe-table"><table>
+      <thead><tr><th>Nom de la colonne</th><th>Compte</th><th style="text-align:right;">Actions</th></tr></thead>
+      <tbody id="u-corps"></tbody>
+    </table></div>
+    <button id="u-add" class="b-bleu" style="margin-top:10px;">+ Ajouter une colonne calculée</button>
+  </div>`);
+  const corps = racine.querySelector("#u-corps");
+  const dessiner = () => {
+    corps.innerHTML = "";
+    (d.colonnesCalculees || []).forEach((c, i) => {
+      const cible = (CIBLES.find(x => x[0] === c.cible) || [c.cible, c.cible])[1];
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${esc(c.nom)}</td><td>Nombre de ${esc(cible)}</td><td style="text-align:right;"></td>`;
+      const actions = tr.lastElementChild;
+      actions.appendChild(boutonSupprimer("Supprimer", () => { d.colonnesCalculees.splice(i, 1); BD.sauver(); dessiner(); }));
+      corps.appendChild(tr);
+    });
+    if (!(d.colonnesCalculees || []).length) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td colspan="3" style="text-align:center;color:#64748b;">Aucune colonne calculée.</td>`;
+      corps.appendChild(tr);
+    }
+  };
+  dessiner();
+  racine.querySelector("#u-add").onclick = () => {
+    const form = h(`<div>
+      <h2>Nouvelle colonne calculée</h2>
+      <div class="champ"><label>Nom de la colonne</label><input id="m-nom" placeholder="ex. Nb véhicules"/></div>
+      <div class="champ"><label>Que compte-t-on ?</label>
+        <select id="m-cible">${CIBLES.map(([cle, txt]) => `<option value="${cle}">Nombre de ${txt}</option>`).join("")}</select></div>
+      <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-bleu">Créer</button></div>
+    </div>`);
+    modal(form);
+    form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
+    form.querySelector("#m-ok").onclick = () => {
+      const nom = form.querySelector("#m-nom").value.trim();
+      if (!nom) return;
+      d.colonnesCalculees.push({ nom, cible: form.querySelector("#m-cible").value });
+      BD.sauver(); form.closest(".modal-fond").remove(); rafraichir();
     };
-    box.appendChild(bAdd);
-    cats.appendChild(carte);
-  });
+  };
   return racine;
 }
 
@@ -896,10 +1328,12 @@ function lancerTests() {
   };
   const assert = (cond, msg) => { if (!cond) throw new Error(msg); };
 
-  test("Instance neuve contient les 5 catégories du catalogue", () => {
+  test("Instance neuve contient les 6 catégories du catalogue", () => {
     const d = Noyau.instanceNeuve();
-    assert(Object.keys(d.catalogue).length === 5, "5 catégories attendues");
+    assert(Object.keys(d.catalogue).length === 6, "6 catégories attendues");
     assert(d.lignes.length === 0, "Aucune ligne au départ");
+    // Le catalogue est maintenant un classeur : labels avec origine + codes.
+    assert(d.catalogue["Activités"].labels[0].origine === "standard", "Les labels d'origine sont 'standard'");
   });
 
   test("Une ligne valide passe la validation", () => {
@@ -932,10 +1366,140 @@ function lancerTests() {
     assert(Noyau.ajouterLabel(d, "Activités", "Navette nocturne").ok, "L'ajout devrait réussir");
     assert(!Noyau.ajouterLabel(d, "Activités", "urbaine").ok, "Un doublon (même casse) doit être refusé");
     Noyau.modifierLabel(d, "Activités", 0, "Urbaine dense");
-    assert(d.catalogue["Activités"][0] === "Urbaine dense", "Le label modifié doit remplacer l'ancien");
-    const avant = d.catalogue["Modes de transport"].length;
+    assert(d.catalogue["Activités"].labels[0].nom === "Urbaine dense", "Le label modifié doit remplacer l'ancien");
+    assert(d.catalogue["Activités"].labels[0].origine === "local", "Un label modifié devient 'local' (orange)");
+    const avant = d.catalogue["Modes de transport"].labels.length;
     Noyau.supprimerLabel(d, "Modes de transport", 0);
-    assert(d.catalogue["Modes de transport"].length === avant - 1, "La suppression doit retirer exactement 1 label");
+    assert(d.catalogue["Modes de transport"].labels.length === avant - 1, "La suppression doit retirer exactement 1 label");
+  });
+
+  test("Mise à jour standards : ajouts automatiques marqués 'standard', code GTFS pré-rempli, idempotente", () => {
+    const d = Noyau.instanceNeuve();
+    const r1 = Noyau.majReferentiel(d);
+    assert(r1.ajoutes > 0, "La 1re mise à jour doit ajouter des labels");
+    const metro = d.catalogue["Modes de transport"].labels.find(x => x.nom === "Métro");
+    assert(metro && metro.codes["export"] === "1", "Le Métro doit être ajouté avec le code GTFS '1'");
+    assert(metro.origine === "standard", "Un label ajouté automatiquement est 'standard' (bleu)");
+    const r2 = Noyau.majReferentiel(d);
+    assert(r2.ajoutes === 0, "Une 2e mise à jour ne doit rien ajouter (idempotence)");
+  });
+
+  test("Label utilisé : suppression refusée, renommage répercuté sur les lignes", () => {
+    const d = Noyau.instanceNeuve();
+    d.reseaux.push({ id: "r1", nom: "STAR", validiteDebut: "", validiteFin: "" });
+    d.lignes.push({ id: "l1", abrev: "A", nom: "Ligne A", reseauId: "r1", contratId: null, activite: "Urbaine", mode: "Autobus", groupe: "", vehicules: ["Minibus"], energies: [], fonctions: [] });
+    const idxAct = d.catalogue["Activités"].labels.findIndex(x => x.nom === "Urbaine");
+    // Suppression refusée : le label est utilisé par 1 ligne.
+    const r = Noyau.supprimerLabel(d, "Activités", idxAct);
+    assert(!r.ok && r.erreur.includes("1 ligne"), "La suppression d'un label utilisé doit être refusée en citant le nombre de lignes");
+    assert(Noyau.usagesLabel(d, "Types de véhicule", "Minibus").length === 1, "Le Minibus est utilisé par 1 ligne");
+    // Renommage : les lignes qui l'utilisaient suivent le changement.
+    Noyau.modifierLabel(d, "Activités", idxAct, "Urbaine dense");
+    assert(d.lignes[0].activite === "Urbaine dense", "Le renommage doit être répercuté sur la ligne");
+  });
+
+  test("Réseaux/contrats : noms uniques + usages comptés avant suppression", () => {
+    const d = Noyau.instanceNeuve();
+    d.reseaux.push({ id: "r1", nom: "STAR", validiteDebut: "", validiteFin: "" });
+    d.contrats.push({ id: "c1", nom: "Délégation", reseaux: ["r1"] });
+    d.lignes.push({ id: "l1", abrev: "A", nom: "Ligne A", reseauId: "r1", contratId: "c1", activite: "Urbaine", mode: "Autobus", groupe: "", vehicules: [], energies: [], fonctions: [] });
+    assert(Noyau.nomUtilise(d.reseaux, "star", null), "Un doublon de nom de réseau doit être détecté (même casse)");
+    assert(!Noyau.nomUtilise(d.contrats, "Autre contrat", null), "Un nom de contrat libre doit être accepté");
+    const u = Noyau.usagesReseau(d, "r1");
+    assert(u.lignes.length === 1 && u.contrats.length === 1, "Le réseau est utilisé par 1 ligne et 1 contrat");
+    assert(Noyau.usagesContrat(d, "c1").lignes.length === 1, "Le contrat est utilisé par 1 ligne");
+    d.lignes = []; d.contrats = [];
+    assert(Noyau.usagesReseau(d, "r1").lignes.length === 0 && Noyau.usagesReseau(d, "r1").contrats.length === 0, "Sans utilisations, la suppression redevient autorisée");
+  });
+
+  test("Codes d'export : doublons détectés dans une catégorie", () => {
+    const d = Noyau.instanceNeuve();
+    const modes = d.catalogue["Modes de transport"].labels;
+    modes[0].codes["export"] = "3";
+    modes.find(x => x.nom !== modes[0].nom).codes["export"] = "3"; // doublon volontaire
+    assert(Noyau.doublonsCodes(d, "Modes de transport", "export").includes("3"), "Le code en doublon doit être détecté");
+  });
+
+  /* ---- Tests de persistance (famille B) ----
+     Ils manipulent la VRAIE base locale : on sauvegarde son contenu au
+     départ, on travaille sur une base vierge, puis on restaure tout.
+     Comme ça, lancer les tests ne touche jamais aux vraies données. */
+  const isoler = (fn) => {
+    const backup = localStorage.getItem("hastus_libre_v1");
+    try { BD._raz(); localStorage.removeItem("hastus_libre_v1"); fn(); }
+    finally {
+      if (backup === null) localStorage.removeItem("hastus_libre_v1");
+      else localStorage.setItem("hastus_libre_v1", backup);
+      BD._raz(); // le prochain accès relira l'état restauré
+    }
+  };
+
+  test("Persistance : recharger la page ne perd rien (lignes, session)", () => isoler(() => {
+    const e = BD.lire();
+    e.utilisateurs.push({ id: "u1", nom: "Testeur", mdp: "YWJjZA==", admin: true });
+    e.session = "u1";
+    e.instances.push({ id: "i1", nom: "Essai", desc: "", proprio: "u1", membres: [] });
+    e.donnees["i1"] = Noyau.instanceNeuve();
+    e.donnees["i1"].lignes.push({ id: "o1", abrev: "A", nom: "Ligne A", reseauId: null, contratId: null, activite: "Urbaine", mode: "Autobus", groupe: "", vehicules: [], energies: [], fonctions: [] });
+    BD.sauver();
+    BD._raz(); // simule un rechargement complet de la page
+    const d2 = BD.donneesInstance("i1");
+    assert(!!d2 && d2.lignes.length === 1 && d2.lignes[0].abrev === "A", "La ligne doit survivre au rechargement");
+    assert(!!BD.utilisateurCourant() && BD.utilisateurCourant().nom === "Testeur", "La session doit être conservée");
+  }));
+
+  test("Duplication : la copie vit sa vie indépendamment (via la vraie BD)", () => isoler(() => {
+    const e = BD.lire();
+    e.utilisateurs.push({ id: "u1", nom: "T", mdp: "eA==", admin: true });
+    e.session = "u1";
+    e.instances.push({ id: "i1", nom: "Orig", desc: "", proprio: "u1", membres: [] });
+    e.donnees["i1"] = Noyau.instanceNeuve();
+    e.donnees["i1"].lignes.push({ id: "o1", abrev: "A", nom: "Ligne A", reseauId: null, contratId: null, activite: "Urbaine", mode: "Autobus", groupe: "", vehicules: [], energies: [], fonctions: [] });
+    BD.sauver();
+    const r = BD.dupliquerInstance("i1", "Copie", "");
+    assert(r.ok, "La duplication doit réussir : " + (r.erreur || ""));
+    const copie = e.instances.find(i => i.nom === "Copie");
+    BD.donneesInstance(copie.id).lignes[0].nom = "Modifié dans la copie";
+    assert(BD.donneesInstance("i1").lignes[0].nom === "Ligne A", "L'original ne doit jamais être modifié par la copie");
+  }));
+
+  test("Limites : 32/256 caractères appliquées côté données", () => isoler(() => {
+    const e = BD.lire();
+    e.utilisateurs.push({ id: "u1", nom: "T", mdp: "eA==", admin: true });
+    e.session = "u1";
+    BD.sauver();
+    const r = BD.creerInstance("N".repeat(100), "D".repeat(1000));
+    assert(r.ok, "La création doit réussir avec bornage automatique");
+    const inst = e.instances[0];
+    assert(inst.nom.length === 32, "Le nom doit être borné à 32 caractères, reçu " + inst.nom.length);
+    assert(inst.desc.length === 256, "La description doit être bornée à 256, reçu " + inst.desc.length);
+    BD.modifierInstance(inst.id, "N".repeat(100), "");
+    assert(e.instances.find(x => x.id === inst.id).nom.length === 32, "La modification doit aussi être bornée");
+  }));
+
+  test("Droits : un non-membre ne voit pas l'instance d'autrui", () => isoler(() => {
+    BD.inscrire("Chef", "abcd");   // 1er compte créé → administrateur
+    BD.creerInstance("Instance du Chef", "");
+    BD.inscrire("Invité", "abcd"); // 2e compte → simple membre, session active
+    assert(BD.mesInstances().length === 0, "L'invité ne doit voir aucune instance");
+    BD.affecterMembre(BD.lire().instances[0].id, BD.lire().utilisateurs.find(u => u.nom === "Invité").id);
+    assert(BD.mesInstances().length === 1, "Après affectation, l'invité doit voir l'instance");
+  }));
+
+  test("Colle Excel : réseau inconnu ignoré sans casser l'import", () => {
+    const d = Noyau.instanceNeuve();
+    d.reseaux.push({ id: "r1", nom: "STAR", validiteDebut: "", validiteFin: "" });
+    const res = Noyau.appliquerColle(d, "Abrév\\tNom\\tRéseau\\nZ\\tNouvelle\\tINCONNU");
+    assert(res.crees === 1, "La ligne doit être créée malgré le réseau inconnu");
+    const l = d.lignes.find(x => x.abrev === "Z");
+    assert(l && l.reseauId === null, "Le réseau inconnu doit être ignoré (ligne non rattachée)");
+  });
+
+  test("Colonne calculée : elle compte ce qu'elle annonce", () => {
+    const d = Noyau.instanceNeuve();
+    d.colonnesCalculees.push({ nom: "Nb véhicules", cible: "vehicules" });
+    const l = { id: "o1", abrev: "A", nom: "Ligne A", vehicules: ["Bus standard 12 m", "Minibus"], energies: [], fonctions: [] };
+    assert(Noyau.valeurColCalculee(l, d.colonnesCalculees[0]) === 2, "La colonne doit compter 2 véhicules, reçu " + Noyau.valeurColCalculee(l, d.colonnesCalculees[0]));
   });
 
   test("Colle Excel : mise à jour, création, en-tête ignoré", () => {
