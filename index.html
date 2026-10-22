@@ -75,6 +75,13 @@
    4. TESTS   : suite de tests automatiques exécutée sur le noyau.
    ================================================================ */
 
+/* Filet de sécurité : toute erreur JavaScript non interceptée est
+   affichée clairement à l'écran, au lieu d'un échec silencieux
+   (comportement par défaut du navigateur, très frustrant en test). */
+window.onerror = function (msg, src, lig) {
+  alert("Erreur interne :\n" + msg + "\nFichier/ligne : " + src + " / " + lig);
+};
+
 /* ============ 1. NOYAU : logique métier pure ============ */
 const Noyau = (() => {
 
@@ -175,7 +182,18 @@ const Noyau = (() => {
     return [entetes, ...corps].join("\n");
   }
 
-  return { instanceNeuve, nouvelId, validerLigne, ajouterLabel, modifierLabel, supprimerLabel, appliquerColle, exporterTSV };
+  /* Sécurité de saisie pour les instances : nom 1 à 32 caractères,
+     description 256 caractères maximum (valeurs optimisées : un nom
+     reste lisible, une description tient sur quelques lignes). */
+  function validerInstance(nom, desc) {
+    const n = (nom || "").trim(), d = (desc || "").trim();
+    if (!n) return { ok: false, erreur: "Nom d'instance obligatoire." };
+    if (n.length > 32) return { ok: false, erreur: "Le nom ne peut dépasser 32 caractères." };
+    if (d.length > 256) return { ok: false, erreur: "La description ne peut dépasser 256 caractères." };
+    return { ok: true };
+  }
+
+  return { instanceNeuve, nouvelId, validerLigne, validerInstance, ajouterLabel, modifierLabel, supprimerLabel, appliquerColle, exporterTSV };
 })();
 
 /* ============ 2. BD : persistance locale ============ */
@@ -185,7 +203,16 @@ const BD = (() => {
 
   function charger() {
     try { etat = JSON.parse(localStorage.getItem(CLE)) || null; } catch (e) { etat = null; }
-    if (!etat) etat = { utilisateurs: [], session: null, instances: [], donnees: {} };
+    if (!etat || typeof etat !== "object") etat = {};
+    /* RÉPARATION IMPORTANTE : si les données ont été sauvegardées par une
+       version antérieure de l'appli, il peut manquer des clés (ex. "donnees"
+       ou "membres"). Sans cette réparation, la création d'instance plantait
+       EN SILENCE (erreur JavaScript invisible pour l'utilisateur). */
+    if (!Array.isArray(etat.utilisateurs)) etat.utilisateurs = [];
+    if (!Array.isArray(etat.instances)) etat.instances = [];
+    if (!etat.donnees || typeof etat.donnees !== "object") etat.donnees = {};
+    if (!etat.session) etat.session = null;
+    etat.instances.forEach(i => { if (!Array.isArray(i.membres)) i.membres = []; });
     return etat;
   }
   function sauver() { localStorage.setItem(CLE, JSON.stringify(etat)); }
@@ -221,7 +248,9 @@ const BD = (() => {
   }
   function creerInstance(nom, desc) {
     const e = lire(); const u = utilisateurCourant(); if (!u) return { ok: false, erreur: "Non connecté." };
-    if (!nom.trim()) return { ok: false, erreur: "Nom d'instance obligatoire." };
+    // Validation des limites de caractères AVANT toute écriture.
+    const v = Noyau.validerInstance(nom, desc);
+    if (!v.ok) return { ok: false, erreur: v.erreur };
     const inst = { id: "i" + Date.now(), nom: nom.trim(), desc: (desc || "").trim(), proprio: u.id, membres: [] };
     e.instances.push(inst);
     e.donnees[inst.id] = Noyau.instanceNeuve();
@@ -230,8 +259,9 @@ const BD = (() => {
   function dupliquerInstance(id, nouveauNom, nouvelleDesc) {
     const e = lire(); const u = utilisateurCourant(); if (!u) return { ok: false, erreur: "Non connecté." };
     const src = e.instances.find(i => i.id === id); if (!src) return { ok: false, erreur: "Instance introuvable." };
-    if (!nouveauNom.trim()) return { ok: false, erreur: "Nom obligatoire." };
-    const inst = { ...src, id: "i" + Date.now(), nom: nouveauNom.trim(), desc: nouvelleDesc.trim(), proprio: u.id, membres: [] };
+    const v = Noyau.validerInstance(nouveauNom, nouvelleDesc);
+    if (!v.ok) return { ok: false, erreur: v.erreur };
+    const inst = { ...src, id: "i" + Date.now(), nom: nouveauNom.trim(), desc: (nouvelleDesc || "").trim(), proprio: u.id, membres: [] };
     // Copie PROFONDE des données : la copie vit ensuite sa vie indépendamment.
     e.instances.push(inst);
     e.donnees[inst.id] = JSON.parse(JSON.stringify(e.donnees[id]));
@@ -239,6 +269,8 @@ const BD = (() => {
   }
   function modifierInstance(id, nom, desc) {
     const e = lire(); const i = e.instances.find(x => x.id === id); if (!i) return { ok: false, erreur: "Introuvable." };
+    const v = Noyau.validerInstance(nom, desc);
+    if (!v.ok) return { ok: false, erreur: v.erreur };
     i.nom = nom.trim(); i.desc = (desc || "").trim(); sauver(); return { ok: true };
   }
   function supprimerInstance(id) {
@@ -334,6 +366,46 @@ function modal(contenu) {
   fond.onclick = (e) => { if (e.target === fond) fond.remove(); };
   document.body.appendChild(fond);
   return fond;
+}
+
+/* Fenêtre modale COMMUNE pour créer / dupliquer / modifier une instance.
+   Sécurité de saisie en deux couches :
+   - couche 1 (confort) : maxlength bloque la frappe, un compteur affiche
+     le nombre de caractères restants (nom 32 max, description 256 max) ;
+   - couche 2 (garantie) : le noyau revalide les limites à l'enregistrement.
+   Le bouton de validation est aussi blindé : toute erreur inattendue
+   est affichée dans une alerte plutôt que d'échouer en silence. */
+function modalInstance({ titre, nom = "", desc = "", libelleBouton, classeBouton, onValider }) {
+  const form = h(`<div>
+    <h2>${esc(titre)}</h2>
+    <div class="champ"><label>Nom de l'instance (32 caractères max)</label>
+      <input id="m-nom" maxlength="32" value="${esc(nom)}"/>
+      <div class="info-txt" id="m-cpt-nom">0 / 32</div></div>
+    <div class="champ"><label>Description courte (256 caractères max)</label>
+      <textarea id="m-desc" maxlength="256" rows="2">${esc(desc)}</textarea>
+      <div class="info-txt" id="m-cpt-desc">0 / 256</div></div>
+    <div class="ligne-boutons"><button id="m-ann">Annuler</button>
+      <button id="m-ok" class="${classeBouton}">${libelleBouton}</button></div>
+  </div>`);
+  modal(form);
+  const nomInp = form.querySelector("#m-nom"), descInp = form.querySelector("#m-desc");
+  // Compteurs en temps réel : l'utilisateur voit sa marge avant même de valider.
+  const majCompteurs = () => {
+    form.querySelector("#m-cpt-nom").textContent = nomInp.value.length + " / 32";
+    form.querySelector("#m-cpt-desc").textContent = descInp.value.length + " / 256";
+  };
+  nomInp.oninput = majCompteurs; descInp.oninput = majCompteurs; majCompteurs();
+  form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
+  form.querySelector("#m-ok").onclick = () => {
+    try {
+      const r = onValider(nomInp.value, descInp.value);
+      if (r && !r.ok) { alert(r.erreur); return; }
+      form.closest(".modal-fond").remove(); rafraichir();
+    } catch (e) {
+      // Erreur imprévue : on l'affiche au lieu de laisser le bouton "ne rien faire".
+      alert("Erreur lors de l'enregistrement : " + e.message);
+    }
+  };
 }
 
 /* ---------- Écran accueil : liste des instances ---------- */
