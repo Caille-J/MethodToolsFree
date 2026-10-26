@@ -31,7 +31,8 @@
   th { background: #f8fafc; text-align: left; padding: 10px; font-size: 11px; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
   td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; }
   tr:hover td { background: #f0f9ff; }
-  .enveloppe-table { border: 1px solid #e2e8f0; border-radius: 10px; overflow-x: auto; }
+  .enveloppe-table { border: 1px solid #e2e8f0; border-radius: 10px; overflow-x: auto; width: 100%; }
+  .enveloppe-table table { min-width: 100%; }
   input, select, textarea { border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 10px; font-size: 14px; font-family: inherit; width: 100%; }
   .champ { margin-bottom: 12px; }
   .champ label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
@@ -69,14 +70,13 @@
   /* Tableau des lignes : icônes d'action, sélection, entêtes tri/filtre. */
   .ico { border: none; background: none; padding: 2px 4px; font-size: 14px; cursor: pointer; }
   .ico:hover { color: #0284c7; }
-  /* Menu ⚙ Colonnes : grille STRICTE (case | nom | flèches) — la case et les
-     flèches sont centrées dans des colonnes de largeur FIXE, le nom est aligné
-     à gauche : tous les éléments forment des colonnes parfaitement verticales. */
-  .p-ligne { display: grid; grid-template-columns: 26px 1fr 60px; align-items: center; gap: 10px; padding: 6px 8px; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
+  /* Menu ⚙ Colonnes : grille STRICTE en 4 colonnes (demande de Jules) :
+     case 1/8 (centrée) · nom 5/8 (aligné à gauche) · flèche ↑ 1/8 · flèche ↓ 1/8
+     (boutons centrés). Les largeurs proportionnelles garantissent l'alignement. */
+  .p-ligne { display: grid; grid-template-columns: 1fr 5fr 1fr 1fr; align-items: center; gap: 8px; padding: 6px 10px; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
   .p-ligne input { justify-self: center; }
   .p-ligne > span { justify-self: start; }
-  .p-ligne .p-fleches { justify-self: end; display: inline-flex; gap: 4px; }
-  .p-ligne .p-fleches button { width: 26px; height: 24px; }
+  .p-ligne button { justify-self: center; width: 26px; height: 24px; }
   /* Icône ℹ️ : au survol, une bulle sombre affiche l'explication
      (ex. champs publics / privés du formulaire de ligne). */
   .aide-info { position: relative; cursor: help; }
@@ -141,9 +141,11 @@ const Noyau = (() => {
   function validerLigne(data, ligne, ignoreId) {
     const errs = [];
     if (!ligne.abrev || !ligne.abrev.trim()) errs.push("Abréviation obligatoire.");
+    else if (ligne.abrev.trim().length > 8) errs.push("Abréviation : 8 caractères maximum.");
     else if (data.lignes.some(l => l.abrev.toLowerCase() === ligne.abrev.trim().toLowerCase()
               && l.id !== ignoreId)) errs.push("Abréviation déjà utilisée dans cette instance.");
     if (!ligne.nom || !ligne.nom.trim()) errs.push("Nom commercial obligatoire.");
+    else if (ligne.nom.trim().length > 64) errs.push("Nom commercial : 64 caractères maximum.");
     if (!ligne.reseauId) errs.push("Réseau obligatoire.");
     if (!ligne.activite) errs.push("Activité obligatoire (une seule).");
     if (!ligne.mode) errs.push("Mode de transport obligatoire (un seul).");
@@ -154,9 +156,10 @@ const Noyau = (() => {
      origine "standard" (référentiel GTFS/NeTEx, couleur bleue) ou
      "local" (ajouté/modifié par l'utilisateur, couleur orange). */
   function ajouterLabel(data, categorie, valeur, origine) {
-    const v = (valeur || "").trim();
+    const v = (valeur || "").trim().slice(0, 32);   // 32 caractères max
     const cat = data.catalogue[categorie];
     if (!v) return { ok: false, erreur: "Label vide." };
+    if ((valeur || "").trim().length > 32) return { ok: false, erreur: "32 caractères maximum pour un label." };
     if (cat.labels.some(x => x.nom.toLowerCase() === v.toLowerCase()))
       return { ok: false, erreur: "Ce label existe déjà." };
     cat.labels.push({ nom: v, origine: origine || "local", codes: {} });
@@ -165,6 +168,7 @@ const Noyau = (() => {
   function modifierLabel(data, categorie, index, valeur) {
     const v = (valeur || "").trim();
     if (!v) return { ok: false, erreur: "Label vide." };
+    if (v.length > 32) return { ok: false, erreur: "32 caractères maximum pour un label." };
     const l = data.catalogue[categorie].labels[index];
     const ancien = l.nom;
     l.nom = v;
@@ -305,12 +309,17 @@ const Noyau = (() => {
       if (idx === 0 && /^abr/i.test((c[0] || "").trim())) return;
       const abrev = (c[0] || "").trim();
       if (!abrev) { res.ignorees++; return; }
+      // Limites (identiques à la saisie manuelle) : abréviation 8 car.,
+      // nom 64 car. — la ligne est ignorée si elle ne les respecte pas.
+      if (abrev.length > 8) { res.ignorees++; return; }
       const nom = (c[1] || "").trim();
-      const reseauNom = (c[2] || "").trim();
-      const contratNom = (c[3] || "").trim();
-      const activite = (c[4] || "").trim();
-      const mode = (c[5] || "").trim();
-      const groupe = (c[6] || "").trim();
+      if (nom.length > 64) { res.ignorees++; return; }
+      // Champs libres (réseau, contrat, activité, mode, groupe) : 32 car.
+      const reseauNom = (c[2] || "").trim().slice(0, 32);
+      const contratNom = (c[3] || "").trim().slice(0, 32);
+      const activite = (c[4] || "").trim().slice(0, 32);
+      const mode = (c[5] || "").trim().slice(0, 32);
+      const groupe = (c[6] || "").trim().slice(0, 32);
       const existante = data.lignes.find(l => l.abrev.toLowerCase() === abrev.toLowerCase());
       if (existante) {
         if (nom) existante.nom = nom;
@@ -870,7 +879,7 @@ function vueLignes() {
 
   const racine = h(`<div style="width:90%;margin:0 auto;">
     <div class="inline-flex" style="justify-content:space-between;width:100%;margin-bottom:10px;">
-      <span class="info-txt">Toutes les lignes de cette instance. Clic : sélectionner — double-clic : modifier (une seule ligne à la fois).</span>
+      <span class="info-txt">Toutes les lignes de cette instance — double-clic pour modifier.</span>
       <span class="inline-flex">
         <span class="menu-col"><button id="b-col">⚙ Colonnes</button></span>
         <button id="b-copy">📋 Copier (Excel)</button>
@@ -1017,12 +1026,12 @@ function vueLignes() {
         const l = h(`<label class="p-ligne">
           <input type="checkbox" ${cochees.has(cle) || col.fixe ? "checked" : ""} ${col.fixe ? "disabled" : ""}/>
           <span>${esc(col.label)}${col.fixe ? ' <span class="etiquette">fixe</span>' : ""}</span>
-          <span class="p-fleches"><button title="Monter" ${i === 0 ? "disabled" : ""}>↑</button>
-          <button title="Descendre" ${i === travail.length - 1 ? "disabled" : ""}>↓</button></span>
+          <button title="Monter" ${i === 0 ? "disabled" : ""}>↑</button>
+          <button title="Descendre" ${i === travail.length - 1 ? "disabled" : ""}>↓</button>
         </label>`);
         const cb = l.querySelector("input");
         cb.onchange = () => cb.checked ? cochees.add(cle) : cochees.delete(cle);
-        const [haut, bas] = l.querySelectorAll(".p-fleches button");
+        const [haut, bas] = l.querySelectorAll("button");
         haut.onclick = () => { travail.splice(i, 1); travail.splice(i - 1, 0, cle); dessiner(); };
         bas.onclick = () => { travail.splice(i, 1); travail.splice(i + 1, 0, cle); dessiner(); };
         box.appendChild(l);
@@ -1272,8 +1281,8 @@ function modalLigne(idLigne) {
   const form = h(`<div>
     <h2>${existante ? "Modifier" : "Créer"} une ligne <span class="aide-info" data-info="${esc(aidePubPrive)}">ℹ️</span></h2>
     <div class="grille">
-      <div class="champ"><label>Abréviation</label><input id="m-abrev" value="${esc(init.abrev)}"/></div>
-      <div class="champ"><label>Nom commercial</label><input id="m-nom" value="${esc(init.nom)}"/></div>
+      <div class="champ"><label>Abréviation (8 car. max)</label><input id="m-abrev" maxlength="8" value="${esc(init.abrev)}"/></div>
+      <div class="champ"><label>Nom commercial (64 car. max)</label><input id="m-nom" maxlength="64" value="${esc(init.nom)}"/></div>
       <div class="champ"><label>Réseau</label><select id="m-reseau"><option value="">— Choisir —</option>
         ${d.reseaux.map(r => `<option value="${r.id}" ${init.reseauId === r.id ? "selected" : ""}>${esc(r.nom)}</option>`).join("")}</select></div>
       <div class="champ"><label>Contrat</label><select id="m-contrat"><option value="">— Aucun —</option>
@@ -1322,10 +1331,10 @@ function modalLigne(idLigne) {
 /* ---------- Vue : réseaux & contrats ---------- */
 function vueReseauxContrats() {
   const d = BD.donneesInstance(App.instanceOuverte.id);
-  const racine = h(`<div>
-    <div class="inline-flex" style="justify-content:space-between;width:100%;margin-bottom:12px;">
-      <span class="vue-switch" id="switch"></span>
+  const racine = h(`<div style="width:90%;margin:0 auto;">
+    <div class="inline-flex" style="gap:12px;margin-bottom:12px;">
       <span id="b-creer"></span>
+      <span class="vue-switch" id="switch"></span>
     </div>
     <div id="liste"></div>
   </div>`);
@@ -1344,9 +1353,6 @@ function vueReseauxContrats() {
     b.onclick = () => modalReseau(null);
     bCreer.appendChild(b);
     if (!d.reseaux.length) liste.appendChild(h(`<p class="info-txt">Aucun réseau. Créez-en un : il sera disponible pour rattacher des lignes.</p>`));
-    // Mention public/privé indiquée UNE fois en tête de vue (et non sur
-    // chaque carte) : les réseaux sont des objets publics.
-    liste.appendChild(h(`<p class="info-txt"><span class="etiquette pub">🚌 public</span> Les réseaux contiennent des informations <b>publiques</b> (visibles dans les exports).</p>`));
     d.reseaux.forEach(r => {
       const carte = h(`<div class="carte">
         <div><b>${esc(r.nom)}</b>
@@ -1393,8 +1399,6 @@ function vueReseauxContrats() {
     b.onclick = () => modalContrat(null);
     bCreer.appendChild(b);
     if (!d.contrats.length) liste.appendChild(h(`<p class="info-txt">Aucun contrat. Les contrats sont des objets privés transporteur.</p>`));
-    // Mention indiquée UNE fois en tête de vue : les contrats sont privés.
-    liste.appendChild(h(`<p class="info-txt"><span class="etiquette prive">🔒 privé transporteur</span> Les contrats contiennent des informations <b>privées</b> (jamais exportées).</p>`));
     d.contrats.forEach(c => {
       const carte = h(`<div class="carte">
         <div><b>${esc(c.nom)}</b>
@@ -1431,7 +1435,7 @@ function modalReseau(idReseau) {
   const r = idReseau ? d.reseaux.find(x => x.id === idReseau) : null;
   const form = h(`<div>
     <h2>${r ? "Modifier" : "Créer"} un réseau</h2>
-    <div class="champ"><label>Nom du réseau <span class="etiquette pub">🚌 public</span></label><input id="m-nom" value="${r ? esc(r.nom) : ""}"/></div>
+    <div class="champ"><label>Nom du réseau (32 car. max)</label><input id="m-nom" maxlength="32" value="${r ? esc(r.nom) : ""}"/></div>
     <div class="grille">
       <div class="champ"><label>Début de validité</label><input id="m-deb" type="date" value="${r ? esc(r.validiteDebut) : ""}"/></div>
       <div class="champ"><label>Fin de validité (jusqu'à 2099)</label><input id="m-fin" type="date" min="2020-01-01" max="2099-12-31" value="${r ? esc(r.validiteFin) : ""}"/></div>
@@ -1461,7 +1465,7 @@ function modalContrat(idContrat) {
   const c = idContrat ? d.contrats.find(x => x.id === idContrat) : null;
   const form = h(`<div>
     <h2>${c ? "Modifier" : "Créer"} un contrat</h2>
-    <div class="champ"><label>Nom du contrat <span class="etiquette prive">🔒 Privé transporteur</span></label><input id="m-nom" value="${c ? esc(c.nom) : ""}"/></div>
+    <div class="champ"><label>Nom du contrat (32 car. max)</label><input id="m-nom" maxlength="32" value="${c ? esc(c.nom) : ""}"/></div>
     <div class="champ"><label>Réseaux concernés</label>
       <div class="inline-flex">${d.reseaux.map(r =>
         `<label class="libelle"><input type="checkbox" value="${r.id}" ${c && (c.reseaux || []).includes(r.id) ? "checked" : ""}/> ${esc(r.nom)}</label>`).join("") || '<span class="info-txt">Créez d\'abord des réseaux.</span>'}</div></div>
@@ -1494,7 +1498,7 @@ function vueCatalogue() {
   const d = BD.donneesInstance(App.instanceOuverte.id);
   const cats = [...Object.keys(d.catalogue), "Colonnes calculées"];
   if (!App.vueCat || !cats.includes(App.vueCat)) App.vueCat = cats[0];
-  const racine = h(`<div>
+  const racine = h(`<div style="width:90%;margin:0 auto;">
     <div>
       <p class="info-txt" style="margin:0;">Listes de référence de l'instance, alignées sur les standards NeTEx / GTFS.
         <button id="maj-ref" style="border:none;background:none;color:#64748b;text-decoration:underline;cursor:pointer;font-size:12px;padding:0;" title="Ajoute les valeurs des standards manquantes">🔄 Mettre à jour depuis les standards</button></p>
@@ -1535,15 +1539,15 @@ function vueCatalogue() {
 /* Un onglet du classeur : le tableau des labels d'une catégorie. */
 function vueOngletCatalogue(d, categorie) {
   const cat = d.catalogue[categorie];
-  const racine = h(`<div>
+  const racine = h(`<div style="width:90%;margin:0 auto;">
+    <div class="inline-flex" style="margin-bottom:10px;">
+      <button id="c-add" class="b-bleu">+ Ajouter un label</button>
+      <button id="c-col" class="b-bleu">+ Ajouter une colonne d'export</button>
+    </div>
     <div class="enveloppe-table"><table>
       <thead><tr><th>Label</th>${cat.colonnes.map((c, ci) => `<th data-ci="${ci}">${esc(c)} <button class="ico f-ren" title="Renommer cette colonne d'export">✎</button><button class="ico f-sup" title="Supprimer cette colonne d'export">✕</button></th>`).join("")}<th style="text-align:right;">Actions</th></tr></thead>
       <tbody id="c-corps"></tbody>
     </table></div>
-    <div class="inline-flex" style="margin-top:10px;">
-      <button id="c-add" class="b-bleu">+ Ajouter un label</button>
-      <button id="c-col">+ Ajouter une colonne d'export</button>
-    </div>
   </div>`);
   // En-têtes des colonnes d'export : renommer (les codes suivent le nouveau
   // nom) et supprimer — mais toujours en garder AU MOINS UNE.
@@ -1553,6 +1557,7 @@ function vueOngletCatalogue(d, categorie) {
       const ancien = cat.colonnes[ci];
       const nv = (prompt("Nouveau nom de la colonne d'export :", ancien) || "").trim();
       if (!nv || nv === ancien) return;
+      if (nv.length > 32) { alert("32 caractères maximum pour un nom de colonne."); return; }
       if (cat.colonnes.includes(nv)) { alert("Ce nom de colonne existe déjà dans cet onglet."); return; }
       cat.labels.forEach(l => { l.codes[nv] = l.codes[ancien]; delete l.codes[ancien]; });
       cat.colonnes[ci] = nv;
@@ -1574,7 +1579,7 @@ function vueOngletCatalogue(d, categorie) {
       // Fond du label selon l'origine : bleu = standard, orange = utilisateur.
       const tr = document.createElement("tr");
       tr.innerHTML = `<td class="cell-${lab.origine === "standard" ? "std" : "loc"}">${esc(lab.nom)}</td>`
-        + cat.colonnes.map(c => `<td><input data-code="${esc(c)}" data-i="${i}" value="${esc(lab.codes[c] || "")}" style="padding:3px 6px;font-size:12px;" placeholder="code…"/></td>`).join("")
+        + cat.colonnes.map(c => `<td><input data-code="${esc(c)}" data-i="${i}" maxlength="16" value="${esc(lab.codes[c] || "")}" style="padding:3px 6px;font-size:12px;" placeholder="code…"/></td>`).join("")
         + `<td style="text-align:right;"></td>`;
       // Codes d'export : saisie directe dans la cellule, enregistrée au
       // change — avec règle d'unicité : deux labels d'une même catégorie
@@ -1630,6 +1635,7 @@ function vueOngletCatalogue(d, categorie) {
   racine.querySelector("#c-col").onclick = () => {
     const nv = (prompt("Nom de la nouvelle colonne d'export :", "export") || "").trim();
     if (!nv) return;
+    if (nv.length > 32) { alert("32 caractères maximum pour un nom de colonne."); return; }
     if (cat.colonnes.includes(nv)) { alert("Cette colonne existe déjà."); return; }
     cat.colonnes.push(nv);
     BD.sauver(); rafraichir();
@@ -1641,14 +1647,16 @@ function vueOngletCatalogue(d, categorie) {
    dans le menu ⚙ Colonnes du tableau « Toutes les lignes ». */
 const CIBLES = [["vehicules", "types de véhicule"], ["energies", "types d'énergie"], ["fonctions", "fonctions embarquées"]];
 function vueColonnesCalculees(d) {
-  const racine = h(`<div>
+  const racine = h(`<div style="width:90%;margin:0 auto;">
     <p class="info-txt">Une colonne calculée compte, pour chaque ligne, le nombre d'éléments cochés dans une liste.
       Elle apparaît ensuite dans le tableau « Toutes les lignes » via le menu ⚙ Colonnes.</p>
+    <div class="inline-flex" style="margin-bottom:10px;">
+      <button id="u-add" class="b-bleu">+ Ajouter une colonne calculée</button>
+    </div>
     <div class="enveloppe-table"><table>
       <thead><tr><th>Nom de la colonne</th><th>Compte</th><th style="text-align:right;">Actions</th></tr></thead>
       <tbody id="u-corps"></tbody>
     </table></div>
-    <button id="u-add" class="b-bleu" style="margin-top:10px;">+ Ajouter une colonne calculée</button>
   </div>`);
   const corps = racine.querySelector("#u-corps");
   const dessiner = () => {
