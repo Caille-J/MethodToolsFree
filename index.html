@@ -79,7 +79,9 @@
   .grille-instances { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; margin-top: 18px; }
   .carte.instance-carte { display: block; background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(244,249,255,0.9)); }
   .carte.instance-carte h3 { margin: 0 0 8px; font-size: 1.15rem; }
-  .carte.instance-carte .actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
+  .carte.instance-carte .actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+  .carte.instance-carte .actions-haut { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+  .carte.instance-carte .actions-haut:not(:empty) { margin: 0 0 10px; }
   .carte.instance-carte .desc { color: var(--muted); line-height: 1.6; min-height: 44px; margin-bottom: 12px; font-size: 13px; }
   .carte.instance-carte .meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
   /* ---- Capsules statistiques (page d'accueil de l'instance) ---- */
@@ -169,6 +171,7 @@
   @media (max-width: 760px) { .catalogue-disposition { grid-template-columns: 1fr; } }
   .menu-gauche { padding: 12px; background: rgba(255,255,255,0.88); border: 1px solid rgba(148,163,184,0.2); border-radius: var(--radius); box-shadow: var(--shadow-soft); }
   .menu-gauche .onglet { display: block; width: 100%; text-align: left; padding: 10px 12px; border-radius: 10px; }
+  .menu-gauche .onglet.onglet-gris { opacity: 0.45; cursor: not-allowed; pointer-events: none; filter: grayscale(1); }
   .panneau-catalogue { padding: 18px; background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(244,248,255,0.82)); border: 1px solid rgba(148,163,184,0.2); border-radius: var(--radius); box-shadow: var(--shadow-soft); }
   /* ---- Icône ℹ️ : au survol, une bulle sombre affiche l'explication. ---- */
   .aide-info { position: relative; cursor: help; }
@@ -800,7 +803,7 @@ function vueAccueil(u) {
     // Carte instance (reprise du prototype V2) : titre, description,
     // badges réseaux/contrats/lignes, actions alignées à droite.
     const carte = h(`<div class="carte instance-carte">
-      <div class="actions"></div>
+      <div class="actions-haut"></div>
       <h3>${esc(inst.nom)}</h3>
       <div class="desc">${esc(inst.desc)}</div>
       <div class="meta">
@@ -808,11 +811,15 @@ function vueAccueil(u) {
         <span class="etiquette">${d.contrats.length} contrats</span>
         <span class="etiquette">${d.lignes.length} lignes</span>
       </div>
+      <div class="actions"></div>
     </div>`);
-    // Les actions sont maintenant le PREMIER élément de la carte (en haut à
-    // droite). firstElementChild = premier ÉLÉMENT uniquement (un nœud texte
-    // invisible ne peut pas recevoir de bouton — c'était le bug du bandeau).
-    const act = carte.firstElementChild;
+    // Les boutons courants restent EN BAS (actions = dernier élément) ;
+    // seul « 👥 Droits » est remonté en HAUT À DROITE de la carte
+    // (demande de Jules V1.11). firstElementChild/lastElementChild = éléments
+    // uniquement (un nœud texte invisible ne peut pas recevoir de bouton —
+    // c'était le bug du bandeau rouge).
+    const act = carte.lastElementChild;
+    const actHaut = carte.firstElementChild;
     const bOuvrir = h(`<button class="b-bleu">Ouvrir</button>`);
     bOuvrir.onclick = () => { App.instanceOuverte = inst; App.vue = "lignes"; App.colonnes = null; rafraichir(); };
     const bDupl = h(`<button>Dupliquer</button>`);
@@ -863,10 +870,11 @@ function vueAccueil(u) {
     act.appendChild(bOuvrir); act.appendChild(bDupl); act.appendChild(bMod);
     act.appendChild(boutonSupprimer("Supprimer", () => { BD.supprimerInstance(inst.id); rafraichir(); }));
     // Gestion des droits : réservée à l'admin ou au propriétaire de l'instance.
+    // Placée en haut à droite de la carte (demande de Jules).
     if (u.admin || inst.proprio === u.id) {
       const bDroits = h(`<button>👥 Droits</button>`);
       bDroits.onclick = () => modalDroits(inst);
-      act.appendChild(bDroits);
+      actHaut.appendChild(bDroits);
     }
     liste.appendChild(carte);
   });
@@ -916,7 +924,7 @@ function vueEspaceTravail(u) {
   // Badge ⚠ sur l'onglet catalogue : valeurs à paramétrer (créées par un
   // import en masse ou saisies sans code d'export).
   const nbAP = Object.values(dOng.catalogue).reduce((n, cat) =>
-    n + cat.labels.filter(l => l.origine === "local" && !(l.codes.export || "").trim()).length, 0);
+    n + cat.labels.filter(l => l.origine === "local" && !Object.values(l.codes || {}).some(c => (c || "").trim())).length, 0);
   const nbRefs = Object.values(dOng.catalogue).reduce((n, cat) => n + cat.labels.length, 0);
   // Capsules statistiques (reprise du prototype V2) : page d'accueil de
   // l'instance — comptes clés toujours visibles au-dessus des onglets.
@@ -1585,7 +1593,6 @@ function vueReseauxContrats() {
     <div class="inline-flex" style="justify-content:center;width:100%;margin-bottom:10px;">
       <span class="vue-switch" id="switch"></span>
     </div>
-    <div style="margin-bottom:12px;"><span id="b-creer"></span></div>
     <div class="barre-filtres" style="grid-template-columns:2.4fr 1.2fr;">
       <div class="champ"><label>Recherche</label>
         <input id="rc-q" value="${esc(App.barreRC.q)}" placeholder="Nom, ligne incluse, ${App.vueObjet === "reseaux" ? "contrat" : "réseau"}, date…"/></div>
@@ -1593,6 +1600,7 @@ function vueReseauxContrats() {
         <select id="rc-tri">${[["nom-asc", "Nom A→Z"], ["nom-desc", "Nom Z→A"], ["deb-asc", "Validité début ↑"], ["deb-desc", "Validité début ↓"], ["fin-asc", "Validité fin ↑"], ["fin-desc", "Validité fin ↓"]]
           .map(([v, l]) => `<option value="${v}" ${App.barreRC.tri === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
     </div>
+    <div style="margin-bottom:12px;"><span id="b-creer"></span></div>
     <div id="liste"></div>
   </div>`);
   const sw = racine.querySelector("#switch");
@@ -1783,7 +1791,9 @@ App.vueCat = "Activités";
 function vueCatalogue() {
   const d = BD.donneesInstance(App.instanceOuverte.id);
   const cats = [...Object.keys(d.catalogue), "Colonnes calculées"];
-  if (!App.vueCat || !cats.includes(App.vueCat)) App.vueCat = cats[0];
+  // « Colonnes calculées » désactivé : on retombe sur la 1re catégorie si
+  // l'état de l'interface pointait dessus (ancienne session).
+  if (!App.vueCat || !cats.includes(App.vueCat) || App.vueCat === "Colonnes calculées") App.vueCat = cats[0];
   /* Disposition (reprise du prototype V2) : onglets de catégories VERTICAUX
      à gauche, panneau de contenu à droite. Toutes les fonctionnalités V1
      (codes d'export, colonnes renommables/supprimables, standards, légende)
@@ -1797,7 +1807,7 @@ function vueCatalogue() {
             <button id="maj-ref" style="border:none;background:none;color:#64748b;text-decoration:underline;cursor:pointer;font-size:12px;padding:0;" title="Ajoute les valeurs des standards manquantes">🔄 Mettre à jour depuis les standards</button></p>
           <p class="info-txt" style="margin:2px 0 0;"><b>Légende :</b> <span class="pastille std"></span> issu des standards (ou ajouté par la mise à jour) ·
             <span class="pastille loc"></span> ajouté ou modifié par vous ·
-            <span class="etiquette alerte">⚠ n</span> valeurs à paramétrer (code d'export vide). Dès que chaque valeur possède son code, le badge disparaît.</p>
+            <span class="etiquette alerte">⚠ n</span> valeurs à paramétrer (aucun code d'export rempli). Dès qu'une colonne est remplie pour chaque valeur, le badge disparaît.</p>
         </div>
         <div id="contenu-cat" style="margin-top:12px;"></div>
       </div>
@@ -1806,12 +1816,19 @@ function vueCatalogue() {
   const ongletsBox = racine.querySelector("#onglets-cat");
   // Badge ⚠ : nombre de valeurs à paramétrer (ajoutées automatiquement ou
   // par l'utilisateur, sans code d'export renseigné).
+  /* Valeur « paramétrée » = AU MOINS UNE colonne d'export remplie
+     (avant : seule la colonne nommée « export » comptait → un label rempli
+     dans une autre colonne restait en avertissement — bug signalé par
+     Jules sur l'onglet Activités). */
   const aParametrer = (cat) => d.catalogue[cat]
-    ? d.catalogue[cat].labels.filter(l => l.origine === "local" && !(l.codes.export || "").trim()).length : 0;
+    ? d.catalogue[cat].labels.filter(l => l.origine === "local" && !Object.values(l.codes || {}).some(c => (c || "").trim())).length : 0;
   cats.forEach(cat => {
     const nb = cat === "Colonnes calculées" ? 0 : aParametrer(cat);
-    const b = h(`<button class="onglet ${App.vueCat === cat ? "actif" : ""}">${esc(cat)}${nb ? ` <span class="etiquette alerte">⚠ ${nb}</span>` : ""}</button>`);
-    b.onclick = () => { App.vueCat = cat; rafraichir(); };
+    // « Colonnes calculées » : DÉSACTIVÉ pour l'instant (grisé, à améliorer
+    // plus tard — demande de Jules V1.11).
+    const grise = cat === "Colonnes calculées";
+    const b = h(`<button class="onglet ${App.vueCat === cat ? "actif" : ""} ${grise ? "onglet-gris" : ""}" ${grise ? "disabled" : ""} ${grise ? 'title="Bientôt disponible"' : ""}>${esc(cat)}${nb ? ` <span class="etiquette alerte">⚠ ${nb}</span>` : ""}</button>`);
+    if (!grise) b.onclick = () => { App.vueCat = cat; rafraichir(); };
     ongletsBox.appendChild(b);
   });
   // Mise à jour : ajoute les valeurs du référentiel GTFS/NeTEx absentes
@@ -1852,6 +1869,8 @@ function vueOngletCatalogue(d, categorie, majAlertes) {
     <div class="inline-flex" style="margin-bottom:10px;">
       <button id="c-add" class="b-bleu">+ Ajouter un label</button>
       <button id="c-col">+ Ajouter une colonne d'export</button>
+      <button id="c-copy">📋 Copier (Excel)</button>
+      <button id="c-imp">📥 Importer</button>
     </div>
     <div class="enveloppe-table tableau-refs"><table>
       <thead><tr><th>Label</th>${cat.colonnes.map((c, ci) => `<th data-ci="${ci}">${esc(c)} <button class="ico f-ren" title="Renommer cette colonne d'export">✎</button><button class="ico f-sup" title="Supprimer cette colonne d'export">✕</button></th>`).join("")}<th style="text-align:right;">Actions</th></tr></thead>
@@ -1951,6 +1970,96 @@ function vueOngletCatalogue(d, categorie, majAlertes) {
     if (cat.colonnes.includes(nv)) { alert("Cette colonne existe déjà."); return; }
     cat.colonnes.push(nv);
     BD.sauver(); rafraichir();
+  };
+  /* ---- 📋 Copier (Excel) et 📥 Importer : mêmes fonctions que le tableau
+     des lignes, appliquées au classeur de CETTE catégorie (V1.11). ---- */
+  racine.querySelector("#c-copy").onclick = () => {
+    const tsv = ["Label\t" + cat.colonnes.join("\t")]
+      .concat(cat.labels.map(l => l.nom + "\t" + cat.colonnes.map(c => l.codes[c] || "").join("\t"))).join("\n");
+    navigator.clipboard?.writeText(tsv);
+    alert("« " + categorie + " » copié ! Collez dans Excel (Ctrl+V).");
+  };
+  racine.querySelector("#c-imp").onclick = () => {
+    const form = h(`<div style="min-width:700px;max-width:95vw;">
+      <h2>Importer « ${esc(categorie)} »</h2>
+      <p class="info-txt">Colonnes : <b>Label — ${cat.colonnes.join(" — ")}</b>.
+        Le nom du label est la clé : existant → mise à jour des codes, nouveau → création.
+        Des colonnes inconnues de l'entête seront ajoutées automatiquement.</p>
+      <div class="champ"><label>📂 Fichier du PC (CSV ou texte exporté d'Excel)</label>
+        <input type="file" id="m-fichier" accept=".csv,.txt,.tsv"/></div>
+      <div class="champ"><label>…ou collez les lignes ici (depuis Excel : Ctrl+C puis Ctrl+V)</label>
+        <textarea id="m-texte" rows="5" placeholder="Label&#9;${esc(cat.colonnes.join("&#9;"))}"></textarea></div>
+      <div class="ligne-boutons"><button id="m-ann">Annuler</button>
+        <button id="m-prev" class="b-bleu">Prévisualiser l'import</button></div>
+    </div>`);
+    modal(form, true);
+    form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
+    form.querySelector("#m-prev").onclick = () => {
+      const fichier = form.querySelector("#m-fichier").files[0];
+      if (fichier) {
+        if (/\.(xlsx|xls)$/i.test(fichier.name)) {
+          alert("Le format .xlsx est un fichier binaire : dans Excel, faites « Fichier → Enregistrer sous → CSV (séparateur point-virgule) », puis réessayez.");
+          return;
+        }
+        const lecteur = new FileReader();
+        lecteur.onload = () => preparerCat(String(lecteur.result));
+        lecteur.readAsText(fichier);
+      } else {
+        const texte = form.querySelector("#m-texte").value;
+        if (!texte.trim()) { alert("Choisissez un fichier ou collez des lignes."); return; }
+        preparerCat(texte);
+      }
+    };
+    /* Analyse (sur rien : rien n'est modifié avant la confirmation) :
+       détection du séparateur (tabulation / ; / virgule), entête optionnelle
+       commençant par « Label ». Chaque ligne → création ou mise à jour. */
+    const preparerCat = (texte) => {
+      const lignes = texte.trim().split(/\r?\n/).filter(r => r.trim());
+      if (!lignes.length) { alert("Rien à importer."); return; }
+      const sep = ["\t", ";", ","].map(s => ({ s, n: lignes[0].split(s).length })).sort((a, b) => b.n - a.n)[0].s;
+      const rangees = lignes.map(r => r.split(sep));
+      let colonnes = cat.colonnes.slice(), debut = 0;
+      const prem = (rangees[0][0] || "").trim().toLowerCase();
+      if (prem === "label" || prem === "labels" || prem === "libellé" || prem === "libelle") {
+        colonnes = rangees[0].slice(1).map(x => x.trim()).filter(Boolean);
+        debut = 1;
+      }
+      if (!colonnes.length) { alert("Aucune colonne d'export détectée."); return; }
+      const plan = rangees.slice(debut).map(r => {
+        const nom = (r[0] || "").trim();
+        const codes = {};
+        colonnes.forEach((c, i) => { const v = (r[i + 1] || "").trim().slice(0, 16); if (v) codes[c] = v; });
+        const existant = nom && cat.labels.find(l => l.nom.toLowerCase() === nom.toLowerCase());
+        return { nom, codes, colonnes, statut: !nom ? "ignoré" : existant ? "modifié" : "créé", cible: existant || null };
+      }).filter(p => p.statut !== "ignoré");
+      if (!plan.length) { alert("Aucune ligne exploitable."); return; }
+      const nbC = plan.filter(p => p.statut === "créé").length, nbM = plan.length - nbC;
+      const apercu = h(`<div>
+        <h2>Prévisualisation — « ${esc(categorie)} »</h2>
+        <p class="info-txt"><span class="etiquette" style="background:#dcfce7;border-color:#86efac;color:#166534;">${nbC} création(s)</span>
+          <span class="etiquette" style="background:#ffedd5;border-color:#fdba74;color:#9a3412;">${nbM} mise(s) à jour</span></p>
+        <div class="enveloppe-table" style="max-height:300px;overflow-y:auto;"><table>
+          <thead><tr><th>Label</th><th>Codes</th><th>Devenir</th></tr></thead>
+          <tbody>${plan.map(p => `<tr><td>${esc(p.nom)}</td>
+            <td>${esc(Object.entries(p.codes).map(([c, v]) => c + " = " + v).join(", ") || "—")}</td>
+            <td>${p.statut === "créé" ? "🟢 création" : "🟠 mise à jour"}</td></tr>`).join("")}</tbody>
+        </table></div>
+        <div class="ligne-boutons"><button id="m-ann2">Annuler</button>
+          <button id="m-ok" class="b-bleu">Importer ${plan.length} ligne(s)</button></div>
+      </div>`);
+      modal(apercu, true);
+      apercu.querySelector("#m-ann2").onclick = () => apercu.closest(".modal-fond").remove();
+      apercu.querySelector("#m-ok").onclick = () => {
+        // Application : nouvelles colonnes ajoutées, labels créés/mis à jour.
+        plan.forEach(p => {
+          Object.keys(p.codes).forEach(c => { if (!cat.colonnes.includes(c) && c.length <= 32) cat.colonnes.push(c); });
+          if (p.cible) Object.assign(p.cible.codes, p.codes);
+          else { const r = Noyau.ajouterLabel(d, categorie, p.nom, "local"); if (r.ok) Object.assign(cat.labels[cat.labels.length - 1].codes, p.codes); }
+        });
+        BD.sauver(); apercu.closest(".modal-fond").remove(); form.closest(".modal-fond").remove();
+        dessiner(); if (majAlertes) majAlertes();
+      };
+    };
   };
   return racine;
 }
