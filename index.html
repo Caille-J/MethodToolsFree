@@ -65,6 +65,7 @@
   .pastille.loc { background: #d97706; }
   td.cell-std { background: #e0f2fe; }
   td.cell-loc { background: #fef3c7; }
+  th.th-oblig { background: #ecfeff; color: #155e75; }
 </style>
 </head>
 <body>
@@ -248,36 +249,72 @@ const Noyau = (() => {
     return { ajoutes };
   }
 
-  /* Modification en masse : parse du texte collé depuis Excel.
-     Colonnes attendues : Abrév, Nom, Réseau, Contrat, Activité, Mode.
-     L'abréviation est la clé : existante → mise à jour, nouvelle → création. */
+  /* Import en masse depuis Excel. Colonnes : Abrév, Nom, Réseau, Contrat,
+     Activité, Mode, Groupe (l'abréviation est la clé : existante → mise à
+     jour, nouvelle → création).
+     Règles métier (Jules) :
+     - une valeur obligatoire inconnue (réseau, activité, mode, groupe) est
+       CRÉÉE automatiquement ; le badge ⚠ du catalogue rappellera qu'elle
+       doit être paramétrée (code d'export) ;
+     - les lignes « suspectes » (même nom commercial qu'une ligne existante)
+       sont signalées pour validation avant l'import ;
+     - le contrat, non obligatoire, n'est jamais créé automatiquement :
+     il n'est relié que s'il existe déjà. */
   function appliquerColle(data, texte) {
+    const res = { maj: 0, crees: 0, ignorees: 0, nouvellesValeurs: {}, suspects: [] };
+    // Crée la valeur dans le catalogue si inconnue (marquée "local", orange).
+    const marquer = (cat, v) => {
+      if (!data.catalogue[cat].labels.some(x => x.nom.toLowerCase() === v.toLowerCase())) {
+        ajouterLabel(data, cat, v, "local");
+        (res.nouvellesValeurs[cat] = res.nouvellesValeurs[cat] || []).push(v);
+      }
+    };
+    // Réseau obligatoire : un nom inconnu est créé immédiatement.
+    const reseauDe = (nomR) => {
+      let r = data.reseaux.find(x => x.nom.toLowerCase() === nomR.toLowerCase());
+      if (!r) {
+        r = { id: nouvelId(data), nom: nomR, validiteDebut: "", validiteFin: "" };
+        data.reseaux.push(r);
+        (res.nouvellesValeurs["Réseaux"] = res.nouvellesValeurs["Réseaux"] || []).push(nomR);
+      }
+      return r;
+    };
     const lignesCollees = texte.trim().split(/\r?\n/).filter(r => r.trim());
-    const res = { maj: 0, crees: 0, ignorees: 0 };
     lignesCollees.forEach((row, idx) => {
       const c = row.split(/\t|;/);
       // Ignore la ligne d'en-tête si elle commence par "Abrév" (cas du copier-coller depuis l'export).
       if (idx === 0 && /^abr/i.test((c[0] || "").trim())) return;
       const abrev = (c[0] || "").trim();
       if (!abrev) { res.ignorees++; return; }
+      const nom = (c[1] || "").trim();
+      const reseauNom = (c[2] || "").trim();
+      const contratNom = (c[3] || "").trim();
+      const activite = (c[4] || "").trim();
+      const mode = (c[5] || "").trim();
+      const groupe = (c[6] || "").trim();
       const existante = data.lignes.find(l => l.abrev.toLowerCase() === abrev.toLowerCase());
       if (existante) {
-        // Ne remplace que les champs réellement remplis dans le collage.
-        if (c[1] && c[1].trim()) existante.nom = c[1].trim();
-        const reseau = (c[2] || "").trim(), contrat = (c[3] || "").trim();
-        if (reseau) { const r = data.reseaux.find(x => x.nom.toLowerCase() === reseau.toLowerCase()); if (r) existante.reseauId = r.id; }
-        if (contrat) { const ct = data.contrats.find(x => x.nom.toLowerCase() === contrat.toLowerCase()); if (ct) existante.contratId = ct.id; }
-        if (c[4] && c[4].trim()) existante.activite = c[4].trim();
-        if (c[5] && c[5].trim()) existante.mode = c[5].trim();
+        if (nom) existante.nom = nom;
+        if (reseauNom) existante.reseauId = reseauDe(reseauNom).id;
+        if (contratNom) { const ct = data.contrats.find(x => x.nom.toLowerCase() === contratNom.toLowerCase()); if (ct) existante.contratId = ct.id; }
+        if (activite) { marquer("Activités", activite); existante.activite = activite; }
+        if (mode) { marquer("Modes de transport", mode); existante.mode = mode; }
+        if (groupe) { marquer("Groupes de lignes", groupe); existante.groupe = groupe; }
         res.maj++;
       } else {
-        // Création : réseau/contrat reliés par nom si trouvés, sinon champs vides.
-        const reseau = data.reseaux.find(x => x.nom.toLowerCase() === (c[2] || "").trim().toLowerCase());
-        const contrat = data.contrats.find(x => x.nom.toLowerCase() === (c[3] || "").trim().toLowerCase());
+        // Suspect (demande de Jules) : même nom commercial qu'une ligne
+        // existante, abréviation différente → validation demandée.
+        if (nom && data.lignes.some(l => l.nom.toLowerCase() === nom.toLowerCase()))
+          res.suspects.push({ abrev, nom });
+        const r = reseauNom ? reseauDe(reseauNom) : null;
+        const ct = contratNom ? data.contrats.find(x => x.nom.toLowerCase() === contratNom.toLowerCase()) : null;
+        if (activite) marquer("Activités", activite);
+        if (mode) marquer("Modes de transport", mode);
+        if (groupe) marquer("Groupes de lignes", groupe);
         data.lignes.push({
-          id: nouvelId(data), abrev, nom: (c[1] || "").trim(),
-          reseauId: reseau ? reseau.id : null, contratId: contrat ? contrat.id : null,
-          activite: (c[4] || "").trim(), mode: (c[5] || "").trim(),
+          id: nouvelId(data), abrev, nom,
+          reseauId: r ? r.id : null, contratId: ct ? ct.id : null,
+          activite, mode, groupe,
           vehicules: [], energies: [], fonctions: []
         });
         res.crees++;
@@ -301,6 +338,12 @@ const Noyau = (() => {
 const BD = (() => {
   const CLE = "hastus_libre_v1";
   let etat = null;
+  /* Identifiant unique : horodatage + suffixe aléatoire. L'horodatage seul
+     peut donner le MÊME id à deux créations dans la même milliseconde (bug
+     découvert par la suite de tests : deux utilisateurs créés à la suite
+     partageaient leur id, donc leurs instances !). Le suffixe aléatoire
+     rend la collision impossible. */
+  const uid = (p) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
   function charger() {
     try { etat = JSON.parse(localStorage.getItem(CLE)) || null; } catch (e) { etat = null; }
@@ -337,7 +380,7 @@ const BD = (() => {
     if (!nom.trim() || motDePasse.length < 4)
       return { ok: false, erreur: "Nom requis, mot de passe de 4 caractères minimum." };
     // Le PREMIER utilisateur créé devient administrateur.
-    const u = { id: "u" + Date.now(), nom: nom.trim(), mdp: btoa(motDePasse), admin: e.utilisateurs.length === 0 };
+    const u = { id: uid("u"), nom: nom.trim(), mdp: btoa(motDePasse), admin: e.utilisateurs.length === 0 };
     e.utilisateurs.push(u); e.session = u.id; sauver();
     return { ok: true };
   }
@@ -364,7 +407,7 @@ const BD = (() => {
     desc = (desc || "").trim().slice(0, LIMITES.descInstance);
     if (!nom) return { ok: false, erreur: "Nom d'instance obligatoire." };
     try {
-      const inst = { id: "i" + Date.now(), nom, desc, proprio: u.id, membres: [] };
+      const inst = { id: uid("i"), nom, desc, proprio: u.id, membres: [] };
       e.instances.push(inst);
       e.donnees[inst.id] = Noyau.instanceNeuve();
       sauver(); return { ok: true };
@@ -380,7 +423,7 @@ const BD = (() => {
     nouvelleDesc = (nouvelleDesc || "").trim().slice(0, LIMITES.descInstance);
     if (!nouveauNom) return { ok: false, erreur: "Nom obligatoire." };
     try {
-      const inst = { ...src, id: "i" + Date.now(), nom: nouveauNom, desc: nouvelleDesc, proprio: u.id, membres: [] };
+      const inst = { ...src, id: uid("i"), nom: nouveauNom, desc: nouvelleDesc, proprio: u.id, membres: [] };
       // Copie PROFONDE des données : la copie vit ensuite sa vie indépendamment.
       e.instances.push(inst);
       e.donnees[inst.id] = JSON.parse(JSON.stringify(e.donnees[id]));
@@ -732,7 +775,13 @@ function vueEspaceTravail(u) {
   </div>`);
   racine.querySelector("#retour").onclick = () => { App.instanceOuverte = null; App.colonnes = null; rafraichir(); };
   const onglets = racine.querySelector("#onglets");
-  [["lignes", "🚏 Toutes les lignes"], ["vue", "🚌 Réseaux & contrats"], ["catalogue", "🏷️ Catalogue de l'instance"]].forEach(([cle, label]) => {
+  // Badge ⚠ sur l'onglet catalogue : valeurs à paramétrer (créées par un
+  // import en masse ou saisies sans code d'export).
+  const dOng = BD.donneesInstance(App.instanceOuverte.id);
+  const nbAP = Object.values(dOng.catalogue).reduce((n, cat) =>
+    n + cat.labels.filter(l => l.origine === "local" && !(l.codes.export || "").trim()).length, 0);
+  [["lignes", "🚏 Toutes les lignes"], ["vue", "🚌 Réseaux & contrats"],
+   ["catalogue", "🏷️ Catalogue de l'instance" + (nbAP ? ` <span class="etiquette" style="background:#fef3c7;border-color:#f59e0b;color:#92400e;">⚠ ${nbAP}</span>` : "")]].forEach(([cle, label]) => {
     const b = h(`<button class="onglet ${App.vue === cle ? "actif" : ""}">${label}</button>`);
     b.onclick = () => { App.vue = cle; rafraichir(); };
     onglets.appendChild(b);
@@ -889,27 +938,100 @@ function vueLignes() {
     alert("Tableau copié ! Collez-le dans Excel (Ctrl+V).");
   };
 
-  // Modification en masse : collage Excel (délégation au noyau).
-  racine.querySelector("#b-masse").onclick = () => {
-    const form = h(`<div>
-      <h2>Modification en masse</h2>
-      <p class="info-txt">Collez des lignes depuis Excel, colonnes séparées par tabulations :
-      <b>Abrév — Nom — Réseau — Contrat — Activité — Mode</b>.<br/>
-      Une abréviation existante est mise à jour ; une nouvelle crée une ligne.</p>
-      <textarea id="m-texte" rows="8" style="width:100%;"></textarea>
-      <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-bleu">Appliquer</button></div>
-    </div>`);
-    modal(form);
-    form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
-    form.querySelector("#m-ok").onclick = () => {
-      const res = Noyau.appliquerColle(d, form.querySelector("#m-texte").value);
-      BD.sauver(); form.closest(".modal-fond").remove(); rafraichir();
-      alert(`Résultat : ${res.maj} ligne(s) mise(s) à jour, ${res.crees} créée(s), ${res.ignorees} ignorée(s).`);
-    };
-  };
+  // Modification en masse : fenêtre dédiée (cf. modalMasse).
+  racine.querySelector("#b-masse").onclick = () => modalMasse();
 
   racine.querySelector("#b-nouv").onclick = () => modalLigne(null);
   return racine;
+}
+
+/* ---------- Modification en masse : fenêtre dédiée (demande de Jules) ----------
+   Contenu : le tableau des lignes EXISTANTES (colonnes obligatoires en
+   couleur + légende), un bouton d'export Excel de ce qui est visible, une
+   zone de collage depuis Excel, et une ANALYSE AVANT IMPORT : comptes des
+   nouveautés/modifications, valeurs inconnues qui seront créées (avec
+   badge ⚠ sur les onglets concernés du catalogue), et signal des lignes
+   a priori déjà existantes (même nom commercial) demandant validation. */
+const COLONNES_MASSE = [
+  { cle: "abrev", label: "Abrév.", oblig: true },
+  { cle: "nom", label: "Nom commercial", oblig: true },
+  { cle: "reseau", label: "Réseau", oblig: true },
+  { cle: "contrat", label: "Contrat" },
+  { cle: "activite", label: "Activité", oblig: true },
+  { cle: "mode", label: "Mode", oblig: true },
+  { cle: "groupe", label: "Groupe" }
+];
+function valMasse(d, l, cle) {
+  if (cle === "reseau") { const r = d.reseaux.find(x => x.id === l.reseauId); return r ? r.nom : ""; }
+  if (cle === "contrat") { const c = d.contrats.find(x => x.id === l.contratId); return c ? c.nom : ""; }
+  return l[cle] || "";
+}
+function modalMasse() {
+  const d = BD.donneesInstance(App.instanceOuverte.id);
+  const form = h(`<div style="min-width:720px;">
+    <h2>Modification en masse</h2>
+    <p class="info-txt"><span class="etiquette" style="background:#ecfeff;border-color:#67e8f9;color:#155e75;">● colonne obligatoire</span>
+      Colonnes à coller depuis Excel : <b>${COLONNES_MASSE.map(c => c.label).join(" — ")}</b> (tabulations ou points-virgules).
+      L'abréviation est la clé : existante → mise à jour, nouvelle → création.</p>
+    <div class="enveloppe-table" style="max-height:240px;overflow-y:auto;"><table>
+      <thead><tr>${COLONNES_MASSE.map(c => `<th class="${c.oblig ? "th-oblig" : ""}">${c.label}${c.oblig ? " ●" : ""}</th>`).join("")}</tr></thead>
+      <tbody id="m-existant"></tbody>
+    </table></div>
+    <div style="margin:8px 0;"><button id="m-export">📋 Exporter ce tableau vers Excel</button></div>
+    <div class="champ"><label>📥 Collez ici les lignes depuis Excel</label>
+      <textarea id="m-texte" rows="6" placeholder="Abrév → tabulation → Nom…"></textarea></div>
+    <div class="erreur" id="m-err" style="color:#b45309;"></div>
+    <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-bleu">Analyser puis importer</button></div>
+  </div>`);
+  // Tableau des lignes existantes (ce qu'on voit = ce qu'on exporte).
+  const corps = form.querySelector("#m-existant");
+  d.lignes.forEach(l => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = COLONNES_MASSE.map(c => `<td>${esc(valMasse(d, l, c.cle))}</td>`).join("");
+    corps.appendChild(tr);
+  });
+  if (!d.lignes.length) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td colspan="${COLONNES_MASSE.length}" style="text-align:center;color:#64748b;">Aucune ligne pour l'instant.</td>`;
+    corps.appendChild(tr);
+  }
+  // Export de ce qu'on voit, au format TSV (collable directement dans Excel).
+  form.querySelector("#m-export").onclick = () => {
+    const tsv = COLONNES_MASSE.map(c => c.label).join("\t") + "\n" +
+      d.lignes.map(l => COLONNES_MASSE.map(c => valMasse(d, l, c.cle)).join("\t")).join("\n");
+    navigator.clipboard?.writeText(tsv);
+    alert("Tableau copié ! Collez-le dans Excel (Ctrl+V), modifiez-le, puis recollez-le ici.");
+  };
+  // Analyse sur une COPIE des données : rien n'est modifié avant validation.
+  // Une fois confirmé, l'import réel exécute exactement le plan analysé.
+  let confirme = false;
+  form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
+  form.querySelector("#m-ok").onclick = () => {
+    const texte = form.querySelector("#m-texte").value;
+    if (!texte.trim()) { form.querySelector("#m-err").textContent = "Collez d'abord des lignes."; return; }
+    const plan = Noyau.appliquerColle(JSON.parse(JSON.stringify(d)), texte);
+    let msg = `Analyse : ${plan.crees} nouvelle(s) ligne(s), ${plan.maj} mise(s) à jour, ${plan.ignorees} ignorée(s).`;
+    const nv = Object.entries(plan.nouvellesValeurs || {});
+    if (nv.length)
+      msg += ` Valeurs inconnues qui seront créées : ${nv.map(([k, vs]) => `${k} → ${vs.join(", ")}`).join(" ; ")} (badge ⚠ dans le catalogue).`;
+    // Suspects (même nom commercial) : validation explicite demandée.
+    if (plan.suspects.length && !confirme) {
+      msg += ` ⚠ ${plan.suspects.length} ligne(s) a priori déjà existante(s) (même nom commercial) : ${plan.suspects.map(s => `${s.abrev} « ${s.nom} »`).join(", ")}. Cliquez à nouveau pour confirmer l'import malgré tout.`;
+      form.querySelector("#m-err").textContent = msg;
+      confirme = true;
+      form.querySelector("#m-ok").textContent = "Confirmer l'import";
+      return;
+    }
+    // Exécution réelle sur les vraies données.
+    const res = Noyau.appliquerColle(d, texte);
+    BD.sauver();
+    alert(`Import terminé : ${res.crees} ligne(s) créée(s), ${res.maj} mise(s) à jour, ${res.ignorees} ignorée(s).` +
+      (Object.keys(res.nouvellesValeurs).length
+        ? ` Nouvelles valeurs à paramétrer : ${Object.entries(res.nouvellesValeurs).map(([k, vs]) => `${k} (${vs.join(", ")})`).join(" ; ")}.`
+        : ""));
+    form.closest(".modal-fond").remove(); rafraichir();
+  };
+  modal(form);
 }
 
 /* Formulaire d'une ligne (création ou modification) avec validation métier. */
@@ -1153,15 +1275,21 @@ function vueCatalogue() {
     <div class="inline-flex" style="justify-content:space-between;width:100%;">
       <span class="info-txt">Listes de référence de l'instance, alignées sur les standards NeTEx / GTFS.<br/>
         <b>Légende :</b> <span class="pastille std"></span> issu des standards (ou ajouté par la mise à jour) ·
-        <span class="pastille loc"></span> ajouté ou modifié par vous.</span>
+        <span class="pastille loc"></span> ajouté ou modifié par vous ·
+        <span class="etiquette" style="background:#fef3c7;border-color:#f59e0b;color:#92400e;">⚠ n</span> valeurs à paramétrer (code d'export vide).</span>
       <button id="maj-ref" class="b-vert" title="Ajoute les valeurs des standards manquantes">🔄 Mettre à jour depuis les standards</button>
     </div>
     <div class="onglets" id="onglets-cat" style="margin:10px 0;flex-wrap:wrap;"></div>
     <div id="contenu-cat"></div>
   </div>`);
   const ongletsBox = racine.querySelector("#onglets-cat");
+  // Badge ⚠ : nombre de valeurs à paramétrer (ajoutées automatiquement ou
+  // par l'utilisateur, sans code d'export renseigné).
+  const aParametrer = (cat) => d.catalogue[cat]
+    ? d.catalogue[cat].labels.filter(l => l.origine === "local" && !(l.codes.export || "").trim()).length : 0;
   cats.forEach(cat => {
-    const b = h(`<button class="onglet ${App.vueCat === cat ? "actif" : ""}">${esc(cat)}</button>`);
+    const nb = cat === "Colonnes calculées" ? 0 : aParametrer(cat);
+    const b = h(`<button class="onglet ${App.vueCat === cat ? "actif" : ""}">${esc(cat)}${nb ? ` <span class="etiquette" style="background:#fef3c7;border-color:#f59e0b;color:#92400e;">⚠ ${nb}</span>` : ""}</button>`);
     b.onclick = () => { App.vueCat = cat; rafraichir(); };
     ongletsBox.appendChild(b);
   });
@@ -1486,14 +1614,37 @@ function lancerTests() {
     assert(BD.mesInstances().length === 1, "Après affectation, l'invité doit voir l'instance");
   }));
 
-  test("Colle Excel : réseau inconnu ignoré sans casser l'import", () => {
+  test("Import masse : valeur obligatoire inconnue créée automatiquement", () => {
     const d = Noyau.instanceNeuve();
     d.reseaux.push({ id: "r1", nom: "STAR", validiteDebut: "", validiteFin: "" });
-    const res = Noyau.appliquerColle(d, "Abrév\\tNom\\tRéseau\\nZ\\tNouvelle\\tINCONNU");
-    assert(res.crees === 1, "La ligne doit être créée malgré le réseau inconnu");
+    const res = Noyau.appliquerColle(d, "Abrév\tNom\tRéseau\tContrat\tActivité\tMode\nZ\tNouvelle\tRÉSEAU NOUVEAU\t\tScolaire\tTéléphérique");
+    assert(res.crees === 1, "La ligne doit être créée");
     const l = d.lignes.find(x => x.abrev === "Z");
-    assert(l && l.reseauId === null, "Le réseau inconnu doit être ignoré (ligne non rattachée)");
+    assert(l && d.reseaux.some(r => r.nom === "RÉSEAU NOUVEAU" && r.id === l.reseauId), "Le réseau inconnu doit être créé et rattaché à la ligne");
+    assert((res.nouvellesValeurs["Modes de transport"] || []).includes("Téléphérique"), "Le mode inconnu doit être signalé comme nouvelle valeur");
+    assert(d.catalogue["Modes de transport"].labels.some(x => x.nom === "Téléphérique" && x.origine === "local"), "Le nouveau mode doit exister dans le catalogue, marqué 'local' (orange, à paramétrer)");
   });
+
+  test("Import masse : doublon de nom commercial signalé comme suspect", () => {
+    const d = Noyau.instanceNeuve();
+    d.reseaux.push({ id: "r1", nom: "STAR", validiteDebut: "", validiteFin: "" });
+    d.lignes.push({ id: "l1", abrev: "A", nom: "Ligne A", reseauId: "r1", contratId: null, activite: "Urbaine", mode: "Autobus", groupe: "", vehicules: [], energies: [], fonctions: [] });
+    const res = Noyau.appliquerColle(d, "B	Ligne A	STAR			");
+    assert(res.crees === 1 && res.suspects.length === 1, "Une création portant un nom déjà utilisé doit être signalée suspecte");
+    assert(res.suspects[0].abrev === "B", "Le suspect signalé doit être la ligne B");
+  });
+
+  test("Identifiants : deux créations rapides restent distinctes (bug corrigé)", () => isoler(() => {
+    BD.inscrire("Alpha", "abcd");
+    BD.inscrire("Beta", "abcd");
+    const e = BD.lire();
+    assert(e.utilisateurs[0].id !== e.utilisateurs[1].id, "Deux utilisateurs créés à la suite doivent avoir des ids différents");
+    // Conséquence directe : Beta ne voit PAS l'instance d'Alpha.
+    BD.connecter("Alpha", "abcd");
+    BD.creerInstance("Chez Alpha", "");
+    BD.connecter("Beta", "abcd");
+    assert(BD.mesInstances().length === 0, "Beta ne doit voir aucune instance d'Alpha");
+  }));
 
   test("Colonne calculée : elle compte ce qu'elle annonce", () => {
     const d = Noyau.instanceNeuve();
