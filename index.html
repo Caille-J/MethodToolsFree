@@ -79,9 +79,9 @@
   .grille-instances { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; margin-top: 18px; }
   .carte.instance-carte { display: block; background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(244,249,255,0.9)); }
   .carte.instance-carte h3 { margin: 0 0 8px; font-size: 1.15rem; }
+  .carte.instance-carte .actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
   .carte.instance-carte .desc { color: var(--muted); line-height: 1.6; min-height: 44px; margin-bottom: 12px; font-size: 13px; }
   .carte.instance-carte .meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
-  .carte.instance-carte .actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
   /* ---- Capsules statistiques (page d'accueil de l'instance) ---- */
   .resume { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; margin-bottom: 18px; }
   .stat { display: block; background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(244,249,255,0.92)); border: 1px solid rgba(148,163,184,0.2); border-radius: var(--radius); box-shadow: var(--shadow-soft); padding: 16px 18px 14px; margin: 0; }
@@ -110,6 +110,14 @@
   .tableau-refs { max-height: 62vh; overflow: auto; }
   .tableau-refs td input { width: 100%; min-width: 140px; }
   .tableau-refs td.cell-std, .tableau-refs td.cell-loc { white-space: nowrap; }
+  /* Listes à sélection multiple (fenêtre ligne) : chaque terme cliquable
+     affiche une coche ✓ quand il est retenu ; champ de filtre + bouton de tri. */
+  .liste-multi .multi-entete { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; }
+  .multi-liste { border: 1px solid var(--line-strong); border-radius: 12px; max-height: 170px; overflow-y: auto; background: rgba(255,255,255,0.75); }
+  .multi-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; font-size: 13px; border-bottom: 1px solid rgba(148,163,184,0.12); }
+  .multi-item:hover { background: rgba(18,102,229,0.07); }
+  .multi-item.sel { background: rgba(29,180,166,0.15); font-weight: 600; }
+  .multi-item .coche { width: 18px; color: var(--secondary); font-weight: 700; flex: none; }
   td.cell-std { background: rgba(18,102,229,0.07); }
   td.cell-loc { background: var(--warning-soft); }
   th.th-oblig { background: linear-gradient(180deg, #ecfeff, #e0f7fa); color: #155e75; }
@@ -131,9 +139,9 @@
   .modal { background: rgba(255,255,255,0.97); border: 1px solid rgba(148,163,184,0.2); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; width: 100%; max-width: 560px; max-height: 88vh; overflow-y: auto; }
   .ligne-boutons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; flex-wrap: wrap; }
   /* ---- Suppression sensible (double clic en 3 s) ---- */
-  .suppr { position: relative; overflow: hidden; border: 1px solid rgba(239,68,68,0.45); background: var(--panel-strong); color: #b91c1c; font-weight: 700; font-size: 12px; }
-  .suppr.armed { background: var(--danger); color: #fff; border-color: var(--danger); }
-  .suppr .barre { position: absolute; left: 0; top: 0; bottom: 0; background: #b91c1c; width: 100%; }
+  .suppr { position: relative; overflow: hidden; border: 1px solid var(--danger); background: linear-gradient(135deg, var(--danger), #dc2626); color: #fff; font-weight: 700; font-size: 12px; }
+  .suppr.armed { background: #b91c1c; color: #fff; border-color: #b91c1c; }
+  .suppr .barre { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(0,0,0,0.28); width: 100%; }
   .suppr.armed .barre { animation: vide 3s linear forwards; }
   @keyframes vide { from { width: 100%; } to { width: 0%; } }
   /* ---- Menu ⚙ Colonnes (panneau ancré) ---- */
@@ -610,7 +618,8 @@ function esc(s) { return String(s ?? '').replace(/[<>"&]/g, c => ENTITIES[c]); }
 /* État d'interface courant (quelle instance, quel onglet, quelles colonnes). */
 const App = { instanceOuverte: null, vue: "lignes", vueObjet: "reseaux", colonnes: null,
               tris: [], filtres: {}, actionsDebut: false, vueCat: "Activités",
-              barre: { q: "", reseau: "all", activite: "all", mode: "all", groupe: "all" } };
+              barre: { q: "", reseau: "all", activite: "all", mode: "all", groupe: "all" },
+              barreRC: { q: "", tri: "nom-asc" } };
 
 /* ---------- Sécurité & diagnostic ----------
    Toute erreur JavaScript non capturée s'affiche dans un bandeau rouge en
@@ -791,6 +800,7 @@ function vueAccueil(u) {
     // Carte instance (reprise du prototype V2) : titre, description,
     // badges réseaux/contrats/lignes, actions alignées à droite.
     const carte = h(`<div class="carte instance-carte">
+      <div class="actions"></div>
       <h3>${esc(inst.nom)}</h3>
       <div class="desc">${esc(inst.desc)}</div>
       <div class="meta">
@@ -798,12 +808,11 @@ function vueAccueil(u) {
         <span class="etiquette">${d.contrats.length} contrats</span>
         <span class="etiquette">${d.lignes.length} lignes</span>
       </div>
-      <div class="actions"></div>
     </div>`);
-    // lastElementChild = dernier ÉLÉMENT uniquement (lastChild peut renvoyer un
-    // nœud texte invisible — espace avant </div> — qui ne peut pas
-    // recevoir de bouton : c'était le bug du bandeau rouge).
-    const act = carte.lastElementChild;
+    // Les actions sont maintenant le PREMIER élément de la carte (en haut à
+    // droite). firstElementChild = premier ÉLÉMENT uniquement (un nœud texte
+    // invisible ne peut pas recevoir de bouton — c'était le bug du bandeau).
+    const act = carte.firstElementChild;
     const bOuvrir = h(`<button class="b-bleu">Ouvrir</button>`);
     bOuvrir.onclick = () => { App.instanceOuverte = inst; App.vue = "lignes"; App.colonnes = null; rafraichir(); };
     const bDupl = h(`<button>Dupliquer</button>`);
@@ -1468,10 +1477,20 @@ function modalLigne(idLigne) {
   const existante = idLigne ? d.lignes.find(l => l.id === idLigne) : null;
   const init = existante || { abrev: "", nom: "", reseauId: "", contratId: null, activite: "", mode: "", groupe: "", vehicules: [], energies: [], fonctions: [] };
   const cat = d.catalogue;
-  // Générateur de blocs à choix multiples (véhicules / énergies / fonctions).
-  const casesMultiples = (titre, catCle, prop) => `<div class="champ"><label>${titre} (plusieurs)</label>
-    <div class="inline-flex">${cat[catCle].labels.map(x =>
-      `<label class="libelle"><input type="checkbox" data-grp="${prop}" value="${esc(x.nom)}" ${init[prop].includes(x.nom) ? "checked" : ""}/> ${esc(x.nom)}</label>`).join("")}</div></div>`;
+  /* Liste à sélection multiple (demande de Jules V1.10) : remplace les
+     cases à cocher. Chaque terme cliqué affiche une coche ✓ ; un champ de
+     filtre et un bouton de tri (A→Z / Z→A) aident à retrouver un terme.
+     La sélection est relue à l'enregistrement via .multi-item.sel. */
+  const listeMultiple = (titre, catCle, prop) => `<div class="champ liste-multi" data-grp="${prop}">
+      <div class="multi-entete"><label style="margin:0;">${titre} (plusieurs — cliquez pour cocher)</label>
+        <span class="inline-flex" style="gap:6px;">
+          <input class="multi-q" placeholder="Filtrer…" style="width:150px;"/>
+          <button type="button" class="petit multi-tri" title="Inverser l'ordre de la liste">A→Z</button>
+        </span></div>
+      <div class="multi-liste">${cat[catCle].labels.map(x =>
+      `<div class="multi-item${init[prop].includes(x.nom) ? " sel" : ""}" data-v="${esc(x.nom)}"><span class="coche">${init[prop].includes(x.nom) ? "✓" : ""}</span><span>${esc(x.nom)}</span></div>`).join("")}</div>
+      <div class="info-txt multi-nb" style="margin:4px 0 0;"></div>
+    </div>`;
   // Icône ℹ️ : au survol, la bulle indique quels champs sont publics
   // (visibles dans les exports) et lesquels sont privés transporteur.
   const aidePubPrive = `Champs PUBLICS (visibles dans les exports) : Abréviation, Nom commercial, Réseau, Activité, Mode de transport, Groupe, types de véhicule, énergies, fonctions embarquées. Champ PRIVÉ transporteur : Contrat.`;
@@ -1494,13 +1513,47 @@ function modalLigne(idLigne) {
         <select id="m-groupe"><option value="">— Aucun —</option>
         ${cat["Groupes de lignes"].labels.map(g => `<option ${init.groupe === g.nom ? "selected" : ""}>${esc(g.nom)}</option>`).join("")}</select></div>
     </div>
-    ${casesMultiples("Types de véhicule", "Types de véhicule", "vehicules")}
-    ${casesMultiples("Types d'énergie", "Types d'énergie", "energies")}
-    ${casesMultiples("Fonctions embarquées", "Fonctions embarquées", "fonctions")}
+    ${listeMultiple("Types de véhicule", "Types de véhicule", "vehicules")}
+    ${listeMultiple("Types d'énergie", "Types d'énergie", "energies")}
+    ${listeMultiple("Fonctions embarquées", "Fonctions embarquées", "fonctions")}
     <div class="erreur" id="m-err"></div>
     <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-bleu">Enregistrer</button></div>
   </div>`);
-  modal(form);
+  /* Fenêtre LARGE (demande de Jules V1.10) : les 3/4 de la largeur du
+     tableau « Toutes les lignes » (panneau-travail) — au moins 560 px. */
+  const fondLigne = modal(form);
+  const panneau = document.querySelector(".panneau-travail");
+  const largTableau = panneau ? panneau.getBoundingClientRect().width : 1200;
+  const boxLigne = fondLigne.firstChild;
+  boxLigne.style.maxWidth = "none";
+  boxLigne.style.width = Math.max(560, Math.round(largTableau * 0.75)) + "px";
+  /* Listes à sélection multiple : filtre, tri, coche ✓ et compteur. */
+  form.querySelectorAll(".liste-multi").forEach(bloc => {
+    const q = bloc.querySelector(".multi-q"), tri = bloc.querySelector(".multi-tri");
+    const lbox = bloc.querySelector(".multi-liste"), nb = bloc.querySelector(".multi-nb");
+    const majNb = () => nb.textContent = lbox.querySelectorAll(".multi-item.sel").length + " sélectionné(s)";
+    q.oninput = () => {
+      const v = q.value.trim().toLowerCase();
+      lbox.querySelectorAll(".multi-item").forEach(it => {
+        it.style.display = it.dataset.v.toLowerCase().includes(v) ? "" : "none";
+      });
+    };
+    let sensAsc = true;
+    tri.onclick = () => {
+      sensAsc = !sensAsc;
+      Array.from(lbox.children).sort((a, b) =>
+        sensAsc ? a.dataset.v.localeCompare(b.dataset.v) : b.dataset.v.localeCompare(a.dataset.v)
+      ).forEach(it => lbox.appendChild(it));
+      tri.textContent = sensAsc ? "A→Z" : "Z→A";
+    };
+    lbox.addEventListener("click", (e) => {
+      const it = e.target.closest(".multi-item"); if (!it) return;
+      it.classList.toggle("sel");
+      it.querySelector(".coche").textContent = it.classList.contains("sel") ? "✓" : "";
+      majNb();
+    });
+    majNb();
+  });
   form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
   form.querySelector("#m-ok").onclick = () => {
     const ligne = {
@@ -1512,9 +1565,9 @@ function modalLigne(idLigne) {
       activite: form.querySelector("#m-act").value,
       mode: form.querySelector("#m-mode").value,
       groupe: form.querySelector("#m-groupe").value,
-      vehicules: Array.from(form.querySelectorAll('[data-grp="vehicules"]:checked')).map(x => x.value),
-      energies: Array.from(form.querySelectorAll('[data-grp="energies"]:checked')).map(x => x.value),
-      fonctions: Array.from(form.querySelectorAll('[data-grp="fonctions"]:checked')).map(x => x.value)
+      vehicules: Array.from(form.querySelectorAll('[data-grp="vehicules"] .multi-item.sel')).map(x => x.dataset.v),
+      energies: Array.from(form.querySelectorAll('[data-grp="energies"] .multi-item.sel')).map(x => x.dataset.v),
+      fonctions: Array.from(form.querySelectorAll('[data-grp="fonctions"] .multi-item.sel')).map(x => x.dataset.v)
     };
     // Validation métier AVANT enregistrement (mêmes règles que les tests automatiques).
     const errs = Noyau.validerLigne(d, ligne, existante ? existante.id : null);
@@ -1533,6 +1586,13 @@ function vueReseauxContrats() {
       <span class="vue-switch" id="switch"></span>
     </div>
     <div style="margin-bottom:12px;"><span id="b-creer"></span></div>
+    <div class="barre-filtres" style="grid-template-columns:2.4fr 1.2fr;">
+      <div class="champ"><label>Recherche</label>
+        <input id="rc-q" value="${esc(App.barreRC.q)}" placeholder="Nom, ligne incluse, ${App.vueObjet === "reseaux" ? "contrat" : "réseau"}, date…"/></div>
+      <div class="champ"><label>Trier par</label>
+        <select id="rc-tri">${[["nom-asc", "Nom A→Z"], ["nom-desc", "Nom Z→A"], ["deb-asc", "Validité début ↑"], ["deb-desc", "Validité début ↓"], ["fin-asc", "Validité fin ↑"], ["fin-desc", "Validité fin ↓"]]
+          .map(([v, l]) => `<option value="${v}" ${App.barreRC.tri === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+    </div>
     <div id="liste"></div>
   </div>`);
   const sw = racine.querySelector("#switch");
@@ -1545,12 +1605,37 @@ function vueReseauxContrats() {
   const liste = racine.querySelector("#liste");
   const nbLignes = (pred) => d.lignes.filter(pred).length;
 
+  /* Recherche + tri (demande de Jules V1.10) : la recherche filtre sur le
+     nom, les lignes rattachées, les contrats/réseaux liés ET les dates de
+     validité ; le tri fonctionne par nom ou par date de validité. */
+  racine.querySelector("#rc-q").oninput = (e) => {
+    App.barreRC.q = e.target.value; rafraichir();
+    const cible = document.getElementById("rc-q");
+    if (cible) { cible.focus(); cible.setSelectionRange(cible.value.length, cible.value.length); }
+  };
+  racine.querySelector("#rc-tri").onchange = (e) => { App.barreRC.tri = e.target.value; rafraichir(); };
+  const q = App.barreRC.q.trim().toLowerCase();
+  const txtLignes = (pred) => d.lignes.filter(pred).map(l => (l.abrev + " " + l.nom).toLowerCase()).join(" ");
+  const trier = (items, cleTxt) => {
+    const [cle, sens] = App.barreRC.tri.split("-");
+    const champ = cle === "nom" ? "nom" : (cle === "deb" ? "validiteDebut" : "validiteFin");
+    return items.sort((a, b) => {
+      const c = (a[champ] || a.nom || "").localeCompare(b[champ] || b.nom || "");
+      return sens === "desc" ? -c : c;
+    });
+  };
+
   if (App.vueObjet === "reseaux") {
     const b = h(`<button class="b-bleu">+ Créer un réseau</button>`);
     b.onclick = () => modalReseau(null);
     bCreer.appendChild(b);
-    if (!d.reseaux.length) liste.appendChild(h(`<p class="info-txt">Aucun réseau. Créez-en un : il sera disponible pour rattacher des lignes.</p>`));
-    d.reseaux.forEach(r => {
+    // Recherche d'un réseau : nom, lignes rattachées, contrats liés, dates.
+    const visibles = trier(d.reseaux.filter(r => !q ||
+      [r.nom, txtLignes(l => l.reseauId === r.id),
+        d.contrats.filter(c => (c.reseaux || []).includes(r.id)).map(c => c.nom).join(" "),
+        r.validiteDebut || "", r.validiteFin || ""].join(" ").toLowerCase().includes(q)), "reseau");
+    if (!visibles.length) liste.appendChild(h(`<p class="info-txt">${d.reseaux.length ? "Aucun réseau ne correspond à la recherche." : "Aucun réseau. Créez-en un : il sera disponible pour rattacher des lignes."}</p>`));
+    visibles.forEach(r => {
       const carte = h(`<div class="carte">
         <div><b>${esc(r.nom)}</b>
           <div class="info-txt">Validité : ${esc(r.validiteDebut || "?")} → ${esc(r.validiteFin || "?")}</div></div>
@@ -1595,8 +1680,12 @@ function vueReseauxContrats() {
     const b = h(`<button class="b-bleu">+ Créer un contrat</button>`);
     b.onclick = () => modalContrat(null);
     bCreer.appendChild(b);
-    if (!d.contrats.length) liste.appendChild(h(`<p class="info-txt">Aucun contrat. Les contrats sont des objets privés transporteur.</p>`));
-    d.contrats.forEach(c => {
+    // Recherche d'un contrat : nom, lignes rattachées, réseaux liés.
+    const visiblesC = trier(d.contrats.filter(c => !q ||
+      [c.nom, txtLignes(l => l.contratId === c.id),
+        d.reseaux.filter(r => (c.reseaux || []).includes(r.id)).map(r => r.nom).join(" ")].join(" ").toLowerCase().includes(q)), "contrat");
+    if (!visiblesC.length) liste.appendChild(h(`<p class="info-txt">${d.contrats.length ? "Aucun contrat ne correspond à la recherche." : "Aucun contrat. Les contrats sont des objets privés transporteur."}</p>`));
+    visiblesC.forEach(c => {
       const carte = h(`<div class="carte">
         <div><b>${esc(c.nom)}</b>
           <div class="info-txt">Réseaux : ${d.reseaux.filter(r => (c.reseaux || []).includes(r.id)).map(r => esc(r.nom)).join(", ") || "—"}</div></div>
@@ -1703,15 +1792,12 @@ function vueCatalogue() {
     <div class="catalogue-disposition">
       <div class="menu-gauche"><div id="onglets-cat" style="display:grid;gap:6px;"></div></div>
       <div class="panneau-catalogue">
-        <div class="inline-flex" style="justify-content:space-between;width:100%;align-items:flex-start;gap:12px;">
         <div>
           <p class="info-txt" style="margin:0;">Listes de référence de l'instance, alignées sur les standards NeTEx / GTFS.
             <button id="maj-ref" style="border:none;background:none;color:#64748b;text-decoration:underline;cursor:pointer;font-size:12px;padding:0;" title="Ajoute les valeurs des standards manquantes">🔄 Mettre à jour depuis les standards</button></p>
           <p class="info-txt" style="margin:2px 0 0;"><b>Légende :</b> <span class="pastille std"></span> issu des standards (ou ajouté par la mise à jour) ·
             <span class="pastille loc"></span> ajouté ou modifié par vous ·
-            <span class="etiquette alerte">⚠ n</span> valeurs à paramétrer (code d'export vide).</p>
-        </div>
-        <button id="cat-save" class="b-vert" title="Enregistre et met à jour les panneaux d'avertissement">💾 Enregistrer</button>
+            <span class="etiquette alerte">⚠ n</span> valeurs à paramétrer (code d'export vide). Dès que chaque valeur possède son code, le badge disparaît.</p>
         </div>
         <div id="contenu-cat" style="margin-top:12px;"></div>
       </div>
@@ -1738,17 +1824,29 @@ function vueCatalogue() {
       ? "Catalogue déjà à jour : aucune valeur des standards ne manque."
       : `${res.ajoutes} label(s) ajouté(s) depuis les standards GTFS/NeTEx (en bleu).`);
   };
-  // Bouton « Enregistrer » : force la sauvegarde puis rafraîchit l'écran,
-  // ce qui met à jour les panneaux d'avertissement (badges ⚠).
-  racine.querySelector("#cat-save").onclick = () => { BD.sauver(); rafraichir(); };
   const box = racine.querySelector("#contenu-cat");
+  /* Mise à jour EN DIRECT des badges ⚠ des onglets (demande de Jules V1.10) :
+     dès que chaque valeur d'une catégorie possède son code d'export, le
+     badge disparaît — sans bouton « Enregistrer », tout est automatique. */
+  const majAlertes = () => {
+    ongletsBox.querySelectorAll("button").forEach((b, idx) => {
+      const cat = cats[idx];
+      if (!cat || cat === "Colonnes calculées") return;
+      const nb = aParametrer(cat);
+      let badge = b.querySelector(".etiquette.alerte");
+      if (nb) {
+        if (badge) badge.textContent = "⚠ " + nb;
+        else b.appendChild(h(`<span class="etiquette alerte">⚠ ${nb}</span>`));
+      } else if (badge) badge.remove();
+    });
+  };
   if (App.vueCat === "Colonnes calculées") box.appendChild(vueColonnesCalculees(d));
-  else box.appendChild(vueOngletCatalogue(d, App.vueCat));
+  else box.appendChild(vueOngletCatalogue(d, App.vueCat, majAlertes));
   return racine;
 }
 
 /* Un onglet du classeur : le tableau des labels d'une catégorie. */
-function vueOngletCatalogue(d, categorie) {
+function vueOngletCatalogue(d, categorie, majAlertes) {
   const cat = d.catalogue[categorie];
   const racine = h(`<div>
     <div class="inline-flex" style="margin-bottom:10px;">
@@ -1816,7 +1914,7 @@ function vueOngletCatalogue(d, categorie) {
       inp.value = lab.codes[inp.dataset.code] || "";
       return;
     }
-    lab.codes[inp.dataset.code] = val; BD.sauver();
+    lab.codes[inp.dataset.code] = val; BD.sauver(); if (majAlertes) majAlertes();
   });
   // Boutons d'action (délégation) : modifier / supprimer / utilisations.
   corps.addEventListener("click", (e) => {
@@ -1825,13 +1923,13 @@ function vueOngletCatalogue(d, categorie) {
     const i = Number(b.dataset.i), lab = cat.labels[i];
     if (b.dataset.act === "mod") {
       const nv = prompt("Modifier le label :", lab.nom);
-      if (nv !== null) { const r = Noyau.modifierLabel(d, categorie, i, nv); if (!r.ok) alert(r.erreur); else { BD.sauver(); dessiner(); } }
+      if (nv !== null) { const r = Noyau.modifierLabel(d, categorie, i, nv); if (!r.ok) alert(r.erreur); else { BD.sauver(); dessiner(); if (majAlertes) majAlertes(); } }
     } else if (b.dataset.act === "sup") {
       // Règle métier (Jules) : la suppression est refusée si le label est
       // utilisé par au moins une ligne (le message indique lesquelles).
       const r = Noyau.supprimerLabel(d, categorie, i);
       if (!r.ok) { alert(r.erreur); return; }
-      BD.sauver(); dessiner();
+      BD.sauver(); dessiner(); if (majAlertes) majAlertes();
     } else if (b.dataset.act === "use") {
       modalUsages(lab.nom, () =>
         Noyau.usagesLabel(d, categorie, lab.nom).map(l => ({
@@ -1844,7 +1942,7 @@ function vueOngletCatalogue(d, categorie) {
   dessiner();
   racine.querySelector("#c-add").onclick = () => {
     const nv = prompt("Nouveau label (s'ajoute à la liste) :");
-    if (nv) { const r = Noyau.ajouterLabel(d, categorie, nv, "local"); if (!r.ok) alert(r.erreur); else { BD.sauver(); dessiner(); } }
+    if (nv) { const r = Noyau.ajouterLabel(d, categorie, nv, "local"); if (!r.ok) alert(r.erreur); else { BD.sauver(); dessiner(); if (majAlertes) majAlertes(); } }
   };
   racine.querySelector("#c-col").onclick = () => {
     const nv = (prompt("Nom de la nouvelle colonne d'export :", "export") || "").trim();
