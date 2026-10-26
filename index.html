@@ -69,11 +69,14 @@
   /* Tableau des lignes : icônes d'action, sélection, entêtes tri/filtre. */
   .ico { border: none; background: none; padding: 2px 4px; font-size: 14px; cursor: pointer; }
   .ico:hover { color: #0284c7; }
-  tr.selectionnee td { background: #e0f2fe !important; }
-  /* Menu ⚙ Colonnes : mise en page UNIFORME (grille case | nom | flèches),
-     CONTENU CENTRÉ dans chaque colonne pour un rendu visuellement cohérent. */
-  .p-ligne { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; justify-items: center; gap: 6px; padding: 4px 6px; font-size: 13px; }
-  .p-ligne .p-fleches { display: inline-flex; gap: 2px; }
+  /* Menu ⚙ Colonnes : grille STRICTE (case | nom | flèches) — la case et les
+     flèches sont centrées dans des colonnes de largeur FIXE, le nom est aligné
+     à gauche : tous les éléments forment des colonnes parfaitement verticales. */
+  .p-ligne { display: grid; grid-template-columns: 26px 1fr 60px; align-items: center; gap: 10px; padding: 6px 8px; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
+  .p-ligne input { justify-self: center; }
+  .p-ligne > span { justify-self: start; }
+  .p-ligne .p-fleches { justify-self: end; display: inline-flex; gap: 4px; }
+  .p-ligne .p-fleches button { width: 26px; height: 24px; }
   /* Icône ℹ️ : au survol, une bulle sombre affiche l'explication
      (ex. champs publics / privés du formulaire de ligne). */
   .aide-info { position: relative; cursor: help; }
@@ -494,7 +497,7 @@ function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;"
 
 /* État d'interface courant (quelle instance, quel onglet, quelles colonnes). */
 const App = { instanceOuverte: null, vue: "lignes", vueObjet: "reseaux", colonnes: null,
-              tris: [], filtres: {}, selection: new Set(), actionsDebut: false, vueCat: "Activités" };
+              tris: [], filtres: {}, actionsDebut: false, vueCat: "Activités" };
 
 /* ---------- Sécurité & diagnostic ----------
    Toute erreur JavaScript non capturée s'affiche dans un bandeau rouge en
@@ -825,7 +828,7 @@ const COLONNES = [
   { cle: "abrev", label: "Abrév." },
   { cle: "nom", label: "Nom commercial" },
   { cle: "reseau", label: "Réseau", join: "reseauId", src: "reseaux" },
-  { cle: "contrat", label: "Contrat 🔒", join: "contratId", src: "contrats" },
+  { cle: "contrat", label: "Contrat", join: "contratId", src: "contrats" },
   { cle: "activite", label: "Activité" },
   { cle: "mode", label: "Mode" },
   { cle: "groupe", label: "Groupe" },
@@ -885,8 +888,8 @@ function vueLignes() {
   /* Entêtes de colonnes (demandes de Jules) :
      - clic sur le titre : tri croissant → décroissant → retiré (cumulatif,
        l'ordre de tri suit l'ordre des clics) ;
-     - bouton 🔎 : bulle de filtre ancrée sous l'entête, avec choix de
-       l'opérateur (contient, égal, etc.) + OK / Annuler / Retirer ;
+     - bouton 🔎 : pop-up de filtre CENTRÉE dans la vue (champ toujours
+       visible), avec choix de l'opérateur + OK / Annuler / Retirer ;
      - badge « filtré ✕ » : un clic retire le filtre. */
   const entetes = racine.querySelector("#entetes");
   cols.forEach(col => {
@@ -912,46 +915,49 @@ function vueLignes() {
     if (badge) badge.onclick = (e) => { e.stopPropagation(); delete App.filtres[col.cle]; rafraichir(); };
     th.querySelector(".ico").onclick = (e) => {
       e.stopPropagation();
-      const ancien = racine.querySelector(".panneau.filtre");
-      if (ancien) { const meme = ancien.parentElement === th; ancien.remove(); if (meme) return; }
+      // Le filtre s'ouvre dans une POP-UP CENTRÉE (pas d'ancre sous l'entête :
+      // le champ était masqué par le tableau — demande de Jules). Police
+      // réduite pour limiter les problèmes d'affichage.
       const f = App.filtres[col.cle] || { op: "contient", txt: "" };
-      const pan = h(`<div class="panneau filtre" style="left:0;right:auto;width:230px;">
-        <label style="font-size:12px;">Filtre « ${esc(col.label)} »</label>
-        <select id="f-op" style="width:100%;margin:4px 0;">${FILTRES_OPS.map(o => `<option value="${o}" ${f.op === o ? "selected" : ""}>${o}</option>`).join("")}</select>
-        <input id="f-txt" value="${esc(f.txt)}" placeholder="texte…" style="font-size:13px;width:100%;"/>
-        <div class="ligne-boutons" style="margin:6px 0 0;">
-          <button id="f-del" title="Supprimer ce filtre">✕</button>
-          <button id="f-ann">Annuler</button>
-          <button id="f-ok" class="b-bleu">OK</button>
+      const box = h(`<div style="max-width:380px;">
+        <h2 style="font-size:16px;">🔎 Filtre — ${esc(col.label)}</h2>
+        <div class="champ"><label style="font-size:12px;">Opérateur</label>
+          <select id="f-op" style="font-size:12px;">${FILTRES_OPS.map(o => `<option value="${o}" ${f.op === o ? "selected" : ""}>${o}</option>`).join("")}</select></div>
+        <div class="champ"><label style="font-size:12px;">Valeur</label>
+          <input id="f-txt" value="${esc(f.txt)}" placeholder="texte…" style="font-size:12px;"/></div>
+        <div class="ligne-boutons">
+          <button id="f-del" style="font-size:12px;">✕ Retirer le filtre</button>
+          <button id="f-ann" style="font-size:12px;">Annuler</button>
+          <button id="f-ok" class="b-bleu" style="font-size:12px;">OK</button>
         </div></div>`);
-      th.appendChild(pan);
-      const tOp = pan.querySelector("#f-op"), tTxt = pan.querySelector("#f-txt");
+      modal(box);
+      const tOp = box.querySelector("#f-op"), tTxt = box.querySelector("#f-txt");
       tOp.onchange = () => { tTxt.disabled = tOp.value === "est vide" || tOp.value === "n'est pas vide"; };
       tOp.onchange();
       tTxt.focus();
+      const fermer = () => box.closest(".modal-fond").remove();
       const ok = () => {
         const op = tOp.value, v = tTxt.value.trim();
         if (op === "est vide" || op === "n'est pas vide") App.filtres[col.cle] = { op, txt: "" };
         else if (v) App.filtres[col.cle] = { op, txt: v };
         else delete App.filtres[col.cle];
-        rafraichir();
+        fermer(); rafraichir();
       };
-      pan.querySelector("#f-ok").onclick = ok;
+      box.querySelector("#f-ok").onclick = ok;
       tTxt.onkeydown = (e) => { if (e.key === "Enter") ok(); };
-      pan.querySelector("#f-ann").onclick = () => pan.remove();
-      pan.querySelector("#f-del").onclick = () => { delete App.filtres[col.cle]; rafraichir(); };
+      box.querySelector("#f-ann").onclick = fermer;
+      box.querySelector("#f-del").onclick = () => { delete App.filtres[col.cle]; fermer(); rafraichir(); };
     };
     entetes.appendChild(th);
   });
 
-  /* Lignes du tableau : sélection au clic, modification au double-clic
-     (désactivée si plusieurs lignes sont sélectionnées — demande Jules). */
+  /* Lignes du tableau : double-clic = modification (sélection multiple
+     retirée à la demande de Jules : elle ne servait à rien). */
   const corps = racine.querySelector("#corps");
   const iAct = cols.findIndex(c => c.cle === "__actions");
   lignesAffichees.forEach(l => {
     const tr = document.createElement("tr");
     tr.dataset.id = l.id;
-    if (App.selection.has(l.id)) tr.classList.add("selectionnee");
     tr.innerHTML = cols.map(col => col.cle === "__actions"
       ? `<td style="text-align:right;"></td>`
       : `<td>${esc(valColonne(d, col, l))}</td>`).join("");
@@ -963,17 +969,10 @@ function vueLignes() {
     actions.appendChild(bMod);
     actions.appendChild(boutonSupprimer("🗑", () => {
       d.lignes = d.lignes.filter(x => x.id !== l.id);
-      App.selection.delete(l.id);
       BD.sauver(); rafraichir();
     }));
-    tr.onclick = (e) => {
-      if (e.target.closest("button")) return;
-      if (App.selection.has(l.id)) App.selection.delete(l.id); else App.selection.add(l.id);
-      tr.classList.toggle("selectionnee");
-    };
     tr.ondblclick = (e) => {
       if (e.target.closest("button")) return;
-      if (App.selection.size > 1) return; // plusieurs sélectionnées : pas d'ouverture
       modalLigne(l.id);
     };
     corps.appendChild(tr);
