@@ -285,19 +285,31 @@ const Noyau = (() => {
      il n'est relié que s'il existe déjà. */
   function appliquerColle(data, texte) {
     const res = { maj: 0, crees: 0, ignorees: 0, nouvellesValeurs: {}, suspects: [] };
+    // OPTIMISATION : index (Maps) construits UNE fois — chaque ligne du
+    // fichier est rattachée en accès direct O(1) au lieu de relire tout
+    // le tableau à chaque find() (sur un gros import : très gros gain).
+    const parAbrev = new Map(data.lignes.map(l => [l.abrev.toLowerCase(), l]));
+    const parNomLigne = new Map(data.lignes.map(l => [l.nom.toLowerCase(), true]));
+    const reseauxParNom = new Map(data.reseaux.map(r => [r.nom.toLowerCase(), r]));
+    const contratsParNom = new Map(data.contrats.map(c => [c.nom.toLowerCase(), c]));
+    const catLabels = {};   // catégorie → Map des labels existants (minuscules)
+    const labelsCat = (cat) => catLabels[cat] ||
+      (catLabels[cat] = new Map(data.catalogue[cat].labels.map(x => [x.nom.toLowerCase(), true])));
     // Crée la valeur dans le catalogue si inconnue (marquée "local", orange).
     const marquer = (cat, v) => {
-      if (!data.catalogue[cat].labels.some(x => x.nom.toLowerCase() === v.toLowerCase())) {
+      if (!labelsCat(cat).has(v.toLowerCase())) {
+        labelsCat(cat).set(v.toLowerCase(), true);
         ajouterLabel(data, cat, v, "local");
         (res.nouvellesValeurs[cat] = res.nouvellesValeurs[cat] || []).push(v);
       }
     };
     // Réseau obligatoire : un nom inconnu est créé immédiatement.
     const reseauDe = (nomR) => {
-      let r = data.reseaux.find(x => x.nom.toLowerCase() === nomR.toLowerCase());
+      let r = reseauxParNom.get(nomR.toLowerCase());
       if (!r) {
         r = { id: nouvelId(data), nom: nomR, validiteDebut: "", validiteFin: "" };
         data.reseaux.push(r);
+        reseauxParNom.set(nomR.toLowerCase(), r);
         (res.nouvellesValeurs["Réseaux"] = res.nouvellesValeurs["Réseaux"] || []).push(nomR);
       }
       return r;
@@ -320,11 +332,11 @@ const Noyau = (() => {
       const activite = (c[4] || "").trim().slice(0, 32);
       const mode = (c[5] || "").trim().slice(0, 32);
       const groupe = (c[6] || "").trim().slice(0, 32);
-      const existante = data.lignes.find(l => l.abrev.toLowerCase() === abrev.toLowerCase());
+      const existante = parAbrev.get(abrev.toLowerCase());
       if (existante) {
-        if (nom) existante.nom = nom;
+        if (nom) { existante.nom = nom; parNomLigne.set(nom.toLowerCase(), true); }
         if (reseauNom) existante.reseauId = reseauDe(reseauNom).id;
-        if (contratNom) { const ct = data.contrats.find(x => x.nom.toLowerCase() === contratNom.toLowerCase()); if (ct) existante.contratId = ct.id; }
+        if (contratNom) { const ct = contratsParNom.get(contratNom.toLowerCase()); if (ct) existante.contratId = ct.id; }
         if (activite) { marquer("Activités", activite); existante.activite = activite; }
         if (mode) { marquer("Modes de transport", mode); existante.mode = mode; }
         if (groupe) { marquer("Groupes de lignes", groupe); existante.groupe = groupe; }
@@ -332,19 +344,22 @@ const Noyau = (() => {
       } else {
         // Suspect (demande de Jules) : même nom commercial qu'une ligne
         // existante, abréviation différente → validation demandée.
-        if (nom && data.lignes.some(l => l.nom.toLowerCase() === nom.toLowerCase()))
+        if (nom && parNomLigne.has(nom.toLowerCase()))
           res.suspects.push({ abrev, nom });
         const r = reseauNom ? reseauDe(reseauNom) : null;
-        const ct = contratNom ? data.contrats.find(x => x.nom.toLowerCase() === contratNom.toLowerCase()) : null;
+        const ct = contratNom ? contratsParNom.get(contratNom.toLowerCase()) : null;
         if (activite) marquer("Activités", activite);
         if (mode) marquer("Modes de transport", mode);
         if (groupe) marquer("Groupes de lignes", groupe);
-        data.lignes.push({
+        const nouvelle = {
           id: nouvelId(data), abrev, nom,
           reseauId: r ? r.id : null, contratId: ct ? ct.id : null,
           activite, mode, groupe,
           vehicules: [], energies: [], fonctions: []
-        });
+        };
+        data.lignes.push(nouvelle);
+        parAbrev.set(abrev.toLowerCase(), nouvelle);
+        if (nom) parNomLigne.set(nom.toLowerCase(), true);
         res.crees++;
       }
     });
@@ -502,7 +517,11 @@ const BD = (() => {
 
 // Fabrique un élément HTML depuis une chaîne, et échappe le texte dynamique.
 function h(html) { const d = document.createElement("div"); d.innerHTML = html.trim(); return d.firstChild; }
-function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+/* OPTIMISATION : la table des entités est créée UNE seule fois (et non à
+   chaque remplacement) — esc() est appelée des milliers de fois lors du
+   rendu des grandes tables. */
+const ENTITIES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+function esc(s) { return String(s ?? '').replace(/[<>"&]/g, c => ENTITIES[c]); }
 
 /* État d'interface courant (quelle instance, quel onglet, quelles colonnes). */
 const App = { instanceOuverte: null, vue: "lignes", vueObjet: "reseaux", colonnes: null,
@@ -858,9 +877,18 @@ function colonnesAffichees() {
   const pref = localStorage.getItem("hastus_colonnes_" + App.instanceOuverte.id);
   return pref ? JSON.parse(pref) : ["abrev", "nom", "reseau", "contrat", "activite", "mode", "groupe", "nbVehicules"];
 }
-function valColonne(d, col, l) {
+/* Valeur affichée d'une cellule. OPTIMISATION : « cache » (optionnel) =
+   Maps id→nom précalculées pour les jointures — évite un find() complet
+   par cellule affichée. */
+function valColonne(d, col, l, cache) {
   if (col.calc) return col.calc(l);
-  if (col.join) { const o = d[col.src].find(x => x.id === l[col.join]); return o ? o.nom : "—"; }
+  if (col.join) {
+    if (cache && cache[col.src]) {
+      const nom = cache[col.src].get(l[col.join]);
+      return nom !== undefined && nom !== null ? nom : "—";
+    }
+    const o = d[col.src].find(x => x.id === l[col.join]); return o ? o.nom : "—";
+  }
   return l[col.cle] || "";
 }
 
@@ -961,30 +989,39 @@ function vueLignes() {
   });
 
   /* Lignes du tableau : double-clic = modification (sélection multiple
-     retirée à la demande de Jules : elle ne servait à rien). */
+     retirée à la demande de Jules : elle ne servait à rien).
+     OPTIMISATION : le corps est construit en UNE SEULE écriture (un seul
+     innerHTML = un seul passage de mise en page) et les événements sont
+     DÉLÉGUÉS sur le tbody (2 écouteurs au total, au lieu de 3 boutons +
+     1 double-clic PAR ligne : sur 1000 lignes, ~4000 écouteurs → 2). */
   const corps = racine.querySelector("#corps");
-  const iAct = cols.findIndex(c => c.cle === "__actions");
-  lignesAffichees.forEach(l => {
-    const tr = document.createElement("tr");
-    tr.dataset.id = l.id;
-    tr.innerHTML = cols.map(col => col.cle === "__actions"
-      ? `<td style="text-align:right;"></td>`
-      : `<td>${esc(valColonne(d, col, l))}</td>`).join("");
-    // Colonne Actions : deux icônes. La suppression garde sa double
-    // confirmation (1er clic arme 3 s, 2e supprime).
-    const actions = tr.children[iAct];
-    const bMod = h(`<button class="ico" title="Modifier">✎</button>`);
-    bMod.onclick = () => modalLigne(l.id);
-    actions.appendChild(bMod);
-    actions.appendChild(boutonSupprimer("🗑", () => {
-      d.lignes = d.lignes.filter(x => x.id !== l.id);
-      BD.sauver(); rafraichir();
-    }));
-    tr.ondblclick = (e) => {
-      if (e.target.closest("button")) return;
-      modalLigne(l.id);
-    };
-    corps.appendChild(tr);
+  const cache = {};
+  dispo.forEach(col => {
+    if (col.join) cache[col.src] = new Map(d[col.src].map(x => [x.id, x.nom]));
+  });
+  corps.innerHTML = lignesAffichees.map(l =>
+    `<tr data-id="${esc(l.id)}">` + cols.map(col => col.cle === "__actions"
+      ? `<td style="text-align:right;"><button class="ico" data-act="mod" data-id="${esc(l.id)}" title="Modifier">✎</button><button class="ico suppr" data-act="sup" data-id="${esc(l.id)}" title="Supprimer">🗑</button></td>`
+      : `<td>${esc(valColonne(d, col, l, cache))}</td>`).join("") + `</tr>`
+  ).join("");
+  // Délégation : un seul écouteur « click » pour tous les boutons ✎/🗑.
+  corps.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-act]");
+    if (!b) return;
+    if (b.dataset.act === "mod") return modalLigne(b.dataset.id);
+    // Suppression : double confirmation (1er clic arme 3 s, 2e supprime).
+    if (b.classList.contains("armed")) {
+      d.lignes = d.lignes.filter(x => x.id !== b.dataset.id);
+      BD.sauver(); rafraichir(); return;
+    }
+    b.classList.add("armed"); b.textContent = "Confirmer ?";
+    setTimeout(() => { if (b.isConnected) { b.classList.remove("armed"); b.textContent = "🗑"; } }, 3000);
+  });
+  // Délégation : un seul écouteur « dblclick » pour tout le tableau.
+  corps.addEventListener("dblclick", (e) => {
+    if (e.target.closest("button")) return;
+    const tr = e.target.closest("tr");
+    if (tr) modalLigne(tr.dataset.id);
   });
   racine.querySelector("#compte").textContent =
     `${lignesAffichees.length} ligne(s) affichée(s) sur ${d.lignes.length}` +
@@ -1098,14 +1135,34 @@ function valMasse(d, l, cle) {
 
 /* Trie et filtre les lignes selon l'état d'affichage. Cumulatif :
    - filtres en ET (un par colonne, opérateur au choix, sans casse) ;
-   - tris enchaînés dans l'ordre des clics (1re colonne cliquée dominante). */
+   - tris enchaînés dans l'ordre des clics (1re colonne cliquée dominante).
+   OPTIMISATION : chaque cellule est calculée UNE SEULE fois (mémoïsation)
+   au lieu d'être recalculée à chaque filtre ET à chaque comparaison du tri
+   (le tri appelle la comparaison n·log(n) fois : le gain est énorme sur
+   les grandes tables). */
 function trierEtFiltrer(d, dispo) {
+  // Cache des jointures (réseau/contrat) : une Map par table au lieu d'un
+  // find() parcourant tout le tableau pour CHAQUE cellule.
+  const cache = {};
+  dispo.forEach(col => {
+    if (col.join) cache[col.src] = new Map(d[col.src].map(x => [x.id, x.nom]));
+  });
+  // Mémoïsation : id de ligne + clé de colonne → valeur déjà calculée.
+  const memo = new Map();
+  const cellule = (l, col) => {
+    let m = memo.get(l.id);
+    if (!m) { m = {}; memo.set(l.id, m); }
+    let v = m[col.cle];
+    if (v === undefined) { v = valColonne(d, col, l, cache); m[col.cle] = v; }
+    return v;
+  };
+  // Filtres (en ET, sans casse).
   let liste = [...d.lignes];
-  Object.entries(App.filtres).forEach(([cle, f]) => {
+  for (const [cle, f] of Object.entries(App.filtres)) {
     const col = dispo.find(c => c.cle === cle);
-    if (!col || !f) return;
+    if (!col || !f) continue;
+    const t = String(f.txt).toLowerCase();
     const evalue = (v) => {
-      const t = String(f.txt).toLowerCase();
       switch (f.op) {
         case "ne contient pas":  return !v.includes(t);
         case "est égal à":       return v === t;
@@ -1117,18 +1174,28 @@ function trierEtFiltrer(d, dispo) {
         default:                 return v.includes(t);   // « contient »
       }
     };
-    liste = liste.filter(l => evalue(String(valColonne(d, col, l)).toLowerCase()));
-  });
-  const cmp = (a, b) => {
-    for (const t of App.tris) {
-      const col = dispo.find(c => c.cle === t.cle);
-      if (!col) continue;
-      const r = String(valColonne(d, col, a)).localeCompare(String(valColonne(d, col, b)), "fr", { numeric: true });
-      if (r !== 0) return t.asc ? r : -r;
+    liste = liste.filter(l => evalue(String(cellule(l, col)).toLowerCase()));
+  }
+  // Tris : colonnes de tri résolues UNE fois (pas à chaque comparaison),
+  // puis tri par décorations : chaque cellule n'est lue qu'une fois.
+  const tris = App.tris
+    .map(t => ({ t, col: dispo.find(c => c.cle === t.cle) }))
+    .filter(x => x.col);
+  const cleTri = (l) => tris.map(({ col }) => String(cellule(l, col)).toLowerCase()).join("\u0000");
+  const triCache = new Map();
+  const ordre = (l) => { let k = triCache.get(l.id); if (k === undefined) { k = cleTri(l); triCache.set(l.id, k); } return k; };
+  liste.sort((a, b) => {
+    const ka = ordre(a), kb = ordre(b);
+    if (ka === kb) return 0;
+    // Comparaison champ par champ pour respecter l'ordre des clics.
+    const va = ka.split("\u0000"), vb = kb.split("\u0000");
+    for (let i = 0; i < va.length; i++) {
+      const r = va[i].localeCompare(vb[i], "fr", { numeric: true });
+      if (r !== 0) return tris[i].t.asc ? r : -r;
     }
     return 0;
-  };
-  return liste.sort(cmp);
+  });
+  return liste;
 }
 
 /* TSV complet (toutes les colonnes brutes), * sur les obligatoires.
@@ -1573,60 +1640,63 @@ function vueOngletCatalogue(d, categorie) {
     };
   });
   const corps = racine.querySelector("#c-corps");
+  /* OPTIMISATION : le tableau est construit en UNE SEULE écriture innerHTML
+     et les événements sont DÉLÉGUÉS sur le tbody (1 écouteur « change » pour
+     les codes, 1 écouteur « click » pour les 3 boutons — au lieu de 3
+     boutons + n inputs PAR ligne). */
   const dessiner = () => {
-    corps.innerHTML = "";
-    cat.labels.forEach((lab, i) => {
-      // Fond du label selon l'origine : bleu = standard, orange = utilisateur.
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td class="cell-${lab.origine === "standard" ? "std" : "loc"}">${esc(lab.nom)}</td>`
-        + cat.colonnes.map(c => `<td><input data-code="${esc(c)}" data-i="${i}" maxlength="16" value="${esc(lab.codes[c] || "")}" style="padding:3px 6px;font-size:12px;" placeholder="code…"/></td>`).join("")
-        + `<td style="text-align:right;"></td>`;
-      // Codes d'export : saisie directe dans la cellule, enregistrée au
-      // change — avec règle d'unicité : deux labels d'une même catégorie
-      // ne peuvent pas porter le même code (il les identifiera à l'export).
-      tr.querySelectorAll("input[data-code]").forEach(inp => {
-        inp.onchange = () => {
-          const val = inp.value.trim();
-          const dejaPris = cat.labels.some((x, j) => j !== i &&
-            (x.codes[inp.dataset.code] || "").trim().toLowerCase() === val.toLowerCase());
-          if (val && dejaPris) {
-            alert("Ce code est déjà utilisé par un autre label de cette catégorie : chaque code doit être unique.");
-            inp.value = lab.codes[inp.dataset.code] || "";
-            return;
-          }
-          lab.codes[inp.dataset.code] = val; BD.sauver();
-        };
-      });
-      const actions = tr.lastElementChild;
-      const bMod = h(`<button title="Modifier le label">✎</button>`);
-      bMod.onclick = () => {
-        const nv = prompt("Modifier le label :", lab.nom);
-        if (nv !== null) { const r = Noyau.modifierLabel(d, categorie, i, nv); if (!r.ok) alert(r.erreur); else { BD.sauver(); dessiner(); } }
-      };
-      const bSup = h(`<button title="Supprimer">✕</button>`);
-      bSup.onclick = () => {
-        // Règle métier (Jules) : la suppression est refusée si le label est
-        // utilisé par au moins une ligne (le message indique lesquelles).
-        const r = Noyau.supprimerLabel(d, categorie, i);
-        if (!r.ok) { alert(r.erreur); return; }
-        BD.sauver(); dessiner();
-      };
-      const bUse = h(`<button title="Où est-il utilisé ?">🔎</button>`);
-      bUse.onclick = () => modalUsages(lab.nom, () =>
+    corps.innerHTML = cat.labels.map((lab, i) =>
+      `<tr><td class="cell-${lab.origine === "standard" ? "std" : "loc"}">${esc(lab.nom)}</td>`
+      + cat.colonnes.map(c => `<td><input data-code="${esc(c)}" data-i="${i}" maxlength="16" value="${esc(lab.codes[c] || "")}" style="padding:3px 6px;font-size:12px;" placeholder="code…"/></td>`).join("")
+      + `<td style="text-align:right;">
+          <button data-act="mod" data-i="${i}" title="Modifier le label">✎</button>
+          <button data-act="sup" data-i="${i}" title="Supprimer">✕</button>
+          <button data-act="use" data-i="${i}" title="Où est-il utilisé ?">🔎</button>
+        </td></tr>`
+    ).join("") + (!cat.labels.length
+      ? `<tr><td colspan="${cat.colonnes.length + 2}" style="text-align:center;color:#64748b;">Aucun label — ajoutez-en ou lancez la mise à jour des standards.</td></tr>`
+      : "");
+  };
+  // Codes d'export : saisie directe dans la cellule, enregistrée au
+  // change — avec règle d'unicité (deux labels d'une même catégorie ne
+  // peuvent pas porter le même code : il les identifiera à l'export).
+  corps.addEventListener("change", (e) => {
+    const inp = e.target.closest("input[data-code]");
+    if (!inp) return;
+    const i = Number(inp.dataset.i), lab = cat.labels[i];
+    const val = inp.value.trim();
+    const dejaPris = val && cat.labels.some((x, j) => j !== i &&
+      (x.codes[inp.dataset.code] || "").trim().toLowerCase() === val.toLowerCase());
+    if (dejaPris) {
+      alert("Ce code est déjà utilisé par un autre label de cette catégorie : chaque code doit être unique.");
+      inp.value = lab.codes[inp.dataset.code] || "";
+      return;
+    }
+    lab.codes[inp.dataset.code] = val; BD.sauver();
+  });
+  // Boutons d'action (délégation) : modifier / supprimer / utilisations.
+  corps.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-act]");
+    if (!b) return;
+    const i = Number(b.dataset.i), lab = cat.labels[i];
+    if (b.dataset.act === "mod") {
+      const nv = prompt("Modifier le label :", lab.nom);
+      if (nv !== null) { const r = Noyau.modifierLabel(d, categorie, i, nv); if (!r.ok) alert(r.erreur); else { BD.sauver(); dessiner(); } }
+    } else if (b.dataset.act === "sup") {
+      // Règle métier (Jules) : la suppression est refusée si le label est
+      // utilisé par au moins une ligne (le message indique lesquelles).
+      const r = Noyau.supprimerLabel(d, categorie, i);
+      if (!r.ok) { alert(r.erreur); return; }
+      BD.sauver(); dessiner();
+    } else if (b.dataset.act === "use") {
+      modalUsages(lab.nom, () =>
         Noyau.usagesLabel(d, categorie, lab.nom).map(l => ({
           label: () => `Ligne <b>${esc(l.abrev)}</b> — ${esc(l.nom)}`,
           modifier: () => modalLigne(l.id),
           supprimer: () => { d.lignes = d.lignes.filter(x => x.id !== l.id); }
         })));
-      actions.appendChild(bMod); actions.appendChild(bSup); actions.appendChild(bUse);
-      corps.appendChild(tr);
-    });
-    if (!cat.labels.length) {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td colspan="${cat.colonnes.length + 2}" style="text-align:center;color:#64748b;">Aucun label — ajoutez-en ou lancez la mise à jour des standards.</td>`;
-      corps.appendChild(tr);
     }
-  };
+  });
   dessiner();
   racine.querySelector("#c-add").onclick = () => {
     const nv = prompt("Nouveau label (s'ajoute à la liste) :");
