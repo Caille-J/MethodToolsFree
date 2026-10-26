@@ -70,9 +70,18 @@
   .ico { border: none; background: none; padding: 2px 4px; font-size: 14px; cursor: pointer; }
   .ico:hover { color: #0284c7; }
   tr.selectionnee td { background: #e0f2fe !important; }
-  /* Menu ⚙ Colonnes : mise en page uniforme (grille case | nom | flèches). */
-  .p-ligne { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 6px; padding: 4px 6px; font-size: 13px; }
+  /* Menu ⚙ Colonnes : mise en page UNIFORME (grille case | nom | flèches),
+     CONTENU CENTRÉ dans chaque colonne pour un rendu visuellement cohérent. */
+  .p-ligne { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; justify-items: center; gap: 6px; padding: 4px 6px; font-size: 13px; }
   .p-ligne .p-fleches { display: inline-flex; gap: 2px; }
+  /* Icône ℹ️ : au survol, une bulle sombre affiche l'explication
+     (ex. champs publics / privés du formulaire de ligne). */
+  .aide-info { position: relative; cursor: help; }
+  .aide-info:hover::after {
+    content: attr(data-info); position: absolute; top: 120%; left: 50%; transform: translateX(-50%);
+    background: #0f172a; color: #fff; padding: 8px 10px; border-radius: 8px;
+    font-size: 12px; font-weight: 400; width: 300px; white-space: normal; z-index: 60;
+  }
 </style>
 </head>
 <body>
@@ -557,9 +566,11 @@ function boutonSupprimer(texte, onConfirme) {
   return b;
 }
 
-/* Fenêtre modale générique. */
-function modal(contenu) {
+/* Fenêtre modale générique. « large » = occupe presque tout l'écran
+   (utilisée par l'import : le tableau doit tenir en largeur). */
+function modal(contenu, large) {
   const fond = h(`<div class="modal-fond"><div class="modal"></div></div>`);
+  if (large) { fond.firstChild.style.maxWidth = "95vw"; fond.firstChild.style.width = "95%"; }
   fond.firstChild.appendChild(contenu);
   fond.onclick = (e) => { if (e.target === fond) fond.remove(); };
   document.body.appendChild(fond);
@@ -817,7 +828,7 @@ const COLONNES = [
   { cle: "contrat", label: "Contrat 🔒", join: "contratId", src: "contrats" },
   { cle: "activite", label: "Activité" },
   { cle: "mode", label: "Mode" },
-  { cle: "groupe", label: "Groupe (network_id)" },
+  { cle: "groupe", label: "Groupe" },
   { cle: "nbVehicules", label: "Nb véhicules", calc: l => l.vehicules.length },
   { cle: "nbEnergies", label: "Nb énergies", calc: l => l.energies.length },
   { cle: "nbFonctions", label: "Nb fonctions", calc: l => l.fonctions.length },
@@ -874,7 +885,9 @@ function vueLignes() {
   /* Entêtes de colonnes (demandes de Jules) :
      - clic sur le titre : tri croissant → décroissant → retiré (cumulatif,
        l'ordre de tri suit l'ordre des clics) ;
-     - bouton 🔎 : filtre « contient » sur la colonne (cumulatif, en ET). */
+     - bouton 🔎 : bulle de filtre ancrée sous l'entête, avec choix de
+       l'opérateur (contient, égal, etc.) + OK / Annuler / Retirer ;
+     - badge « filtré ✕ » : un clic retire le filtre. */
   const entetes = racine.querySelector("#entetes");
   cols.forEach(col => {
     const th = document.createElement("th");
@@ -886,7 +899,7 @@ function vueLignes() {
       return;
     }
     const tri = App.tris.find(t => t.cle === col.cle);
-    th.innerHTML = `<span style="cursor:pointer;">${esc(col.label)}${col.calc ? ' <span class="etiquette">auto</span>' : ""}${tri ? (tri.asc ? " ▲" : " ▼") : ""}${App.filtres[col.cle] ? ' <span class="etiquette" style="background:#fef9c3;">filtré</span>' : ""}</span> <button class="ico" title="Filtrer sur cette colonne">🔎</button>`;
+    th.innerHTML = `<span style="cursor:pointer;">${esc(col.label)}${col.calc ? ' <span class="etiquette">auto</span>' : ""}${tri ? (tri.asc ? " ▲" : " ▼") : ""}</span>${App.filtres[col.cle] ? ' <span class="etiquette f-badge" style="background:#fef9c3;cursor:pointer;" title="Cliquer pour retirer ce filtre">filtré ✕</span>' : ""} <button class="ico" title="Filtrer sur cette colonne">🔎</button>`;
     th.querySelector("span").onclick = () => {
       const t = App.tris.find(x => x.cle === col.cle);
       if (!t) App.tris.push({ cle: col.cle, asc: true });      // 1er clic : croissant
@@ -894,24 +907,38 @@ function vueLignes() {
       else App.tris = App.tris.filter(x => x.cle !== col.cle); // 3e : retiré
       rafraichir();
     };
-    th.querySelector(".ico").onclick = () => {
+    // Badge « filtré ✕ » : retire le filtre en UN clic.
+    const badge = th.querySelector(".f-badge");
+    if (badge) badge.onclick = (e) => { e.stopPropagation(); delete App.filtres[col.cle]; rafraichir(); };
+    th.querySelector(".ico").onclick = (e) => {
+      e.stopPropagation();
       const ancien = racine.querySelector(".panneau.filtre");
-      if (ancien) { ancien.remove(); return; }
-      const pan = h(`<div class="panneau filtre" style="left:0;right:auto;width:210px;">
-        <label style="font-size:12px;">Filtre « ${esc(col.label)} » (contient)</label>
-        <input id="f-txt" value="${esc(App.filtres[col.cle] || "")}" style="font-size:13px;"/>
+      if (ancien) { const meme = ancien.parentElement === th; ancien.remove(); if (meme) return; }
+      const f = App.filtres[col.cle] || { op: "contient", txt: "" };
+      const pan = h(`<div class="panneau filtre" style="left:0;right:auto;width:230px;">
+        <label style="font-size:12px;">Filtre « ${esc(col.label)} »</label>
+        <select id="f-op" style="width:100%;margin:4px 0;">${FILTRES_OPS.map(o => `<option value="${o}" ${f.op === o ? "selected" : ""}>${o}</option>`).join("")}</select>
+        <input id="f-txt" value="${esc(f.txt)}" placeholder="texte…" style="font-size:13px;width:100%;"/>
         <div class="ligne-boutons" style="margin:6px 0 0;">
-          <button id="f-del">Effacer</button><button id="f-ok" class="b-bleu">OK</button>
+          <button id="f-del" title="Supprimer ce filtre">✕</button>
+          <button id="f-ann">Annuler</button>
+          <button id="f-ok" class="b-bleu">OK</button>
         </div></div>`);
       th.appendChild(pan);
-      pan.querySelector("#f-txt").focus();
+      const tOp = pan.querySelector("#f-op"), tTxt = pan.querySelector("#f-txt");
+      tOp.onchange = () => { tTxt.disabled = tOp.value === "est vide" || tOp.value === "n'est pas vide"; };
+      tOp.onchange();
+      tTxt.focus();
       const ok = () => {
-        const v = pan.querySelector("#f-txt").value.trim();
-        if (v) App.filtres[col.cle] = v; else delete App.filtres[col.cle];
+        const op = tOp.value, v = tTxt.value.trim();
+        if (op === "est vide" || op === "n'est pas vide") App.filtres[col.cle] = { op, txt: "" };
+        else if (v) App.filtres[col.cle] = { op, txt: v };
+        else delete App.filtres[col.cle];
         rafraichir();
       };
       pan.querySelector("#f-ok").onclick = ok;
-      pan.querySelector("#f-txt").onkeydown = (e) => { if (e.key === "Enter") ok(); };
+      tTxt.onkeydown = (e) => { if (e.key === "Enter") ok(); };
+      pan.querySelector("#f-ann").onclick = () => pan.remove();
       pan.querySelector("#f-del").onclick = () => { delete App.filtres[col.cle]; rafraichir(); };
     };
     entetes.appendChild(th);
@@ -1041,6 +1068,9 @@ function vueLignes() {
   return racine;
 }
 
+/* Opérateurs disponibles pour le filtre d'une colonne (bulle 🔎). */
+const FILTRES_OPS = ["contient", "ne contient pas", "est égal à", "est différent de", "commence par", "finit par", "est vide", "n'est pas vide"];
+
 /* Colonnes de l'import/export Excel (● = obligatoire). Sert aussi au
    « Copier (Excel) » : tout est copié, * sur les obligatoires. */
 const COLONNES_MASSE = [
@@ -1059,15 +1089,27 @@ function valMasse(d, l, cle) {
 }
 
 /* Trie et filtre les lignes selon l'état d'affichage. Cumulatif :
-   - filtres en ET (un par colonne, « contient », sans casse) ;
+   - filtres en ET (un par colonne, opérateur au choix, sans casse) ;
    - tris enchaînés dans l'ordre des clics (1re colonne cliquée dominante). */
 function trierEtFiltrer(d, dispo) {
   let liste = [...d.lignes];
-  Object.entries(App.filtres).forEach(([cle, txt]) => {
+  Object.entries(App.filtres).forEach(([cle, f]) => {
     const col = dispo.find(c => c.cle === cle);
-    if (!col || !txt) return;
-    liste = liste.filter(l =>
-      String(valColonne(d, col, l)).toLowerCase().includes(String(txt).toLowerCase()));
+    if (!col || !f) return;
+    const evalue = (v) => {
+      const t = String(f.txt).toLowerCase();
+      switch (f.op) {
+        case "ne contient pas":  return !v.includes(t);
+        case "est égal à":       return v === t;
+        case "est différent de": return v !== t;
+        case "commence par":     return v.startsWith(t);
+        case "finit par":        return v.endsWith(t);
+        case "est vide":         return !v;
+        case "n'est pas vide":   return !!v;
+        default:                 return v.includes(t);   // « contient »
+      }
+    };
+    liste = liste.filter(l => evalue(String(valColonne(d, col, l)).toLowerCase()));
   });
   const cmp = (a, b) => {
     for (const t of App.tris) {
@@ -1142,7 +1184,7 @@ function modalImporter() {
     const plan = Noyau.appliquerColle(JSON.parse(JSON.stringify(d)), texte);
     modalApercu(texte, plan);
   }
-  modal(form);
+  modal(form, true);
 }
 
 /* Prévisualisation de l'import : le tableau complet en largeur, chaque
@@ -1212,7 +1254,7 @@ function modalApercu(texte, plan) {
         ? ` Nouvelles valeurs à paramétrer : ${Object.entries(res.nouvellesValeurs).map(([k, vs]) => `${k} (${vs.join(", ")})`).join(" ; ")}.`
         : ""));
   };
-  modal(form);
+  modal(form, true);
 }
 
 /* Formulaire d'une ligne (création ou modification) avec validation métier. */
@@ -1222,27 +1264,28 @@ function modalLigne(idLigne) {
   const init = existante || { abrev: "", nom: "", reseauId: "", contratId: null, activite: "", mode: "", groupe: "", vehicules: [], energies: [], fonctions: [] };
   const cat = d.catalogue;
   // Générateur de blocs à choix multiples (véhicules / énergies / fonctions).
-  const casesMultiples = (titre, catCle, prop) => `<div class="champ"><label>${titre} (plusieurs) <span class="etiquette pub">🚌 public</span></label>
+  const casesMultiples = (titre, catCle, prop) => `<div class="champ"><label>${titre} (plusieurs)</label>
     <div class="inline-flex">${cat[catCle].labels.map(x =>
       `<label class="libelle"><input type="checkbox" data-grp="${prop}" value="${esc(x.nom)}" ${init[prop].includes(x.nom) ? "checked" : ""}/> ${esc(x.nom)}</label>`).join("")}</div></div>`;
+  // Icône ℹ️ : au survol, la bulle indique quels champs sont publics
+  // (visibles dans les exports) et lesquels sont privés transporteur.
+  const aidePubPrive = `Champs PUBLICS (visibles dans les exports) : Abréviation, Nom commercial, Réseau, Activité, Mode de transport, Groupe, types de véhicule, énergies, fonctions embarquées. Champ PRIVÉ transporteur : Contrat.`;
   const form = h(`<div>
-    <h2>${existante ? "Modifier" : "Créer"} une ligne</h2>
+    <h2>${existante ? "Modifier" : "Créer"} une ligne <span class="aide-info" data-info="${esc(aidePubPrive)}">ℹ️</span></h2>
     <div class="grille">
-      <!-- Mention public/privé portée par chaque champ (GTFS : abrev/short_name,
-           nom/long_name, mode = route_type, groupe = network_id). -->
-      <div class="champ"><label>Abréviation <span class="etiquette pub">🚌 public</span></label><input id="m-abrev" value="${esc(init.abrev)}"/></div>
-      <div class="champ"><label>Nom commercial <span class="etiquette pub">🚌 public</span></label><input id="m-nom" value="${esc(init.nom)}"/></div>
-      <div class="champ"><label>Réseau <span class="etiquette pub">🚌 public</span></label><select id="m-reseau"><option value="">— Choisir —</option>
+      <div class="champ"><label>Abréviation</label><input id="m-abrev" value="${esc(init.abrev)}"/></div>
+      <div class="champ"><label>Nom commercial</label><input id="m-nom" value="${esc(init.nom)}"/></div>
+      <div class="champ"><label>Réseau</label><select id="m-reseau"><option value="">— Choisir —</option>
         ${d.reseaux.map(r => `<option value="${r.id}" ${init.reseauId === r.id ? "selected" : ""}>${esc(r.nom)}</option>`).join("")}</select></div>
-      <div class="champ"><label>Contrat <span class="etiquette prive">🔒 privé transporteur</span></label><select id="m-contrat"><option value="">— Aucun —</option>
+      <div class="champ"><label>Contrat</label><select id="m-contrat"><option value="">— Aucun —</option>
         ${d.contrats.map(c => `<option value="${c.id}" ${init.contratId === c.id ? "selected" : ""}>${esc(c.nom)}</option>`).join("")}</select></div>
-      <div class="champ"><label>Activité (1 seule) <span class="etiquette pub">🚌 public</span></label>
+      <div class="champ"><label>Activité (1 seule)</label>
         <select id="m-act"><option value="">— Choisir —</option>
         ${cat["Activités"].labels.map(a => `<option ${init.activite === a.nom ? "selected" : ""}>${esc(a.nom)}</option>`).join("")}</select></div>
-      <div class="champ"><label>Mode de transport (1 seul) <span class="etiquette pub">🚌 public — route_type GTFS</span></label>
+      <div class="champ"><label>Mode de transport (1 seul)</label>
         <select id="m-mode"><option value="">— Choisir —</option>
         ${cat["Modes de transport"].labels.map(m => `<option ${init.mode === m.nom ? "selected" : ""}>${esc(m.nom)}</option>`).join("")}</select></div>
-      <div class="champ"><label>Groupe <span class="etiquette pub">🚌 public — network_id</span></label>
+      <div class="champ"><label>Groupe</label>
         <select id="m-groupe"><option value="">— Aucun —</option>
         ${cat["Groupes de lignes"].labels.map(g => `<option ${init.groupe === g.nom ? "selected" : ""}>${esc(g.nom)}</option>`).join("")}</select></div>
     </div>
@@ -1453,12 +1496,12 @@ function vueCatalogue() {
   const cats = [...Object.keys(d.catalogue), "Colonnes calculées"];
   if (!App.vueCat || !cats.includes(App.vueCat)) App.vueCat = cats[0];
   const racine = h(`<div>
-    <div class="inline-flex" style="justify-content:space-between;width:100%;">
-      <span class="info-txt">Listes de référence de l'instance, alignées sur les standards NeTEx / GTFS.<br/>
-        <b>Légende :</b> <span class="pastille std"></span> issu des standards (ou ajouté par la mise à jour) ·
+    <div>
+      <p class="info-txt" style="margin:0;">Listes de référence de l'instance, alignées sur les standards NeTEx / GTFS.
+        <button id="maj-ref" style="border:none;background:none;color:#64748b;text-decoration:underline;cursor:pointer;font-size:12px;padding:0;" title="Ajoute les valeurs des standards manquantes">🔄 Mettre à jour depuis les standards</button></p>
+      <p class="info-txt" style="margin:2px 0 0;"><b>Légende :</b> <span class="pastille std"></span> issu des standards (ou ajouté par la mise à jour) ·
         <span class="pastille loc"></span> ajouté ou modifié par vous ·
-        <span class="etiquette" style="background:#fef3c7;border-color:#f59e0b;color:#92400e;">⚠ n</span> valeurs à paramétrer (code d'export vide).</span>
-      <button id="maj-ref" class="b-vert" title="Ajoute les valeurs des standards manquantes">🔄 Mettre à jour depuis les standards</button>
+        <span class="etiquette" style="background:#fef3c7;border-color:#f59e0b;color:#92400e;">⚠ n</span> valeurs à paramétrer (code d'export vide).</p>
     </div>
     <div class="onglets" id="onglets-cat" style="margin:10px 0;flex-wrap:wrap;"></div>
     <div id="contenu-cat"></div>
@@ -1495,7 +1538,7 @@ function vueOngletCatalogue(d, categorie) {
   const cat = d.catalogue[categorie];
   const racine = h(`<div>
     <div class="enveloppe-table"><table>
-      <thead><tr><th>Label</th>${cat.colonnes.map(c => `<th>${esc(c)}</th>`).join("")}<th style="text-align:right;">Actions</th></tr></thead>
+      <thead><tr><th>Label</th>${cat.colonnes.map((c, ci) => `<th data-ci="${ci}">${esc(c)} <button class="ico f-ren" title="Renommer cette colonne d'export">✎</button><button class="ico f-sup" title="Supprimer cette colonne d'export">✕</button></th>`).join("")}<th style="text-align:right;">Actions</th></tr></thead>
       <tbody id="c-corps"></tbody>
     </table></div>
     <div class="inline-flex" style="margin-top:10px;">
@@ -1503,6 +1546,28 @@ function vueOngletCatalogue(d, categorie) {
       <button id="c-col">+ Ajouter une colonne d'export</button>
     </div>
   </div>`);
+  // En-têtes des colonnes d'export : renommer (les codes suivent le nouveau
+  // nom) et supprimer — mais toujours en garder AU MOINS UNE.
+  racine.querySelectorAll("th[data-ci]").forEach(th => {
+    const ci = Number(th.dataset.ci);
+    th.querySelector(".f-ren").onclick = () => {
+      const ancien = cat.colonnes[ci];
+      const nv = (prompt("Nouveau nom de la colonne d'export :", ancien) || "").trim();
+      if (!nv || nv === ancien) return;
+      if (cat.colonnes.includes(nv)) { alert("Ce nom de colonne existe déjà dans cet onglet."); return; }
+      cat.labels.forEach(l => { l.codes[nv] = l.codes[ancien]; delete l.codes[ancien]; });
+      cat.colonnes[ci] = nv;
+      BD.sauver(); rafraichir();
+    };
+    th.querySelector(".f-sup").onclick = () => {
+      if (cat.colonnes.length <= 1) { alert("Impossible : il doit rester au moins une colonne d'export dans cet onglet."); return; }
+      const nom = cat.colonnes[ci];
+      if (!confirm(`Supprimer la colonne « ${nom} » ? Les codes d'export qu'elle contient seront perdus.`)) return;
+      cat.labels.forEach(l => delete l.codes[nom]);
+      cat.colonnes.splice(ci, 1);
+      BD.sauver(); rafraichir();
+    };
+  });
   const corps = racine.querySelector("#c-corps");
   const dessiner = () => {
     corps.innerHTML = "";
