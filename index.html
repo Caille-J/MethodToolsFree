@@ -1,1898 +1,2199 @@
 <!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HASTUS libre</title>
-  <style>
-    :root {
-      --bg: #edf3fb;
-      --bg-strong: #e7eef9;
-      --panel: rgba(255,255,255,0.9);
-      --panel-strong: #ffffff;
-      --panel-soft: #f3f8ff;
-      --panel-alt: #f5f7fb;
-      --line: #dfe8f4;
-      --line-strong: #c7d7ee;
-      --text: #112236;
-      --muted: #586d86;
-      --primary: #1266e5;
-      --primary-strong: #0a4ab5;
-      --secondary: #1db4a6;
-      --secondary-strong: #108a7c;
-      --warning: #f59e0b;
-      --warning-soft: #fff4de;
-      --danger: #ef4444;
-      --danger-soft: #fff1f2;
-      --success: #1ead67;
-      --success-soft: #ebfff5;
-      --shadow: 0 20px 46px rgba(15, 28, 56, 0.12);
-      --shadow-soft: 0 8px 22px rgba(17, 38, 74, 0.08);
-      --radius: 20px;
-      --radius-md: 16px;
-      --radius-sm: 12px;
-      --radius-xs: 10px;
-      --header-h: 76px;
-    }
-
-    * { box-sizing: border-box; }
-    html, body { margin: 0; min-height: 100%; }
-    body {
-      font-family: Inter, "Segoe UI", sans-serif;
-      background:
-        radial-gradient(circle at top left, rgba(18,102,229,0.15), transparent 25%),
-        radial-gradient(circle at bottom right, rgba(29,180,166,0.12), transparent 30%),
-        var(--bg);
-      color: var(--text);
-    }
-    button, input, select, textarea {
-      font: inherit;
-    }
-    button {
-      border: 1px solid var(--line-strong);
-      background: var(--panel-strong);
-      color: var(--text);
-      border-radius: 10px;
-      padding: 10px 14px;
-      cursor: pointer;
-      transition: all 0.18s ease;
-      box-shadow: 0 1px 0 rgba(15, 28, 56, 0.03);
-      font-weight: 600;
-    }
-    button:hover { transform: translateY(-1px); }
-    button:active { transform: translateY(0); }
-    button.primary {
-      background: linear-gradient(135deg, var(--primary), var(--primary-strong));
-      border-color: var(--primary);
-      color: #fff;
-      box-shadow: 0 12px 24px rgba(18,102,229,0.22);
-    }
-    button.success {
-      background: linear-gradient(135deg, var(--secondary), var(--secondary-strong));
-      border-color: var(--secondary);
-      color: #fff;
-    }
-    button.warning {
-      background: linear-gradient(135deg, #fbbf24, #f59e0b);
-      border-color: #f59e0b;
-      color: #fff;
-    }
-    button.danger {
-      background: linear-gradient(135deg, #ef4444, #dc2626);
-      border-color: #ef4444;
-      color: #fff;
-    }
-    button.ghost { background: transparent; }
-    button.small {
-      padding: 7px 10px;
-      font-size: 12px;
-    }
-    button:disabled {
-      opacity: 0.62;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    .app-shell {
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .topbar {
-      height: var(--header-h);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 24px;
-      background: rgba(255,255,255,0.8);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid rgba(145, 164, 190, 0.25);
-      position: sticky;
-      top: 0;
-      z-index: 30;
-    }
-    .brand {
-      display: inline-flex;
-      align-items: center;
-      gap: 12px;
-      font-weight: 800;
-      letter-spacing: 0.025em;
-      color: var(--text);
-    }
-    .brand-mark {
-      width: 38px; height: 38px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 12px;
-      background: linear-gradient(135deg, rgba(18,102,229,0.12), rgba(29,180,166,0.18));
-      color: var(--primary);
-      font-size: 1.2rem;
-    }
-    .topbar-actions {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .container {
-      width: min(1210px, calc(100% - 32px));
-      margin: 22px auto 40px;
-    }
-    .card {
-      background: rgba(255,255,255,0.86);
-      border: 1px solid rgba(148, 163, 184, 0.2);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow-soft);
-    }
-
-    .auth-wrap {
-      display: grid;
-      place-items: center;
-      min-height: calc(100vh - var(--header-h));
-      padding: 32px 16px;
-    }
-    .auth-card {
-      width: min(460px, 100%);
-      padding: 28px 24px;
-      background: rgba(255,255,255,0.92);
-      border: 1px solid rgba(208,220,236,0.82);
-      border-radius: 24px;
-      box-shadow: var(--shadow);
-    }
-    h1, h2, h3 { margin: 0 0 12px; }
-    h1 { font-size: clamp(1.9rem, 2.8vw, 2.5rem); }
-    h2 { font-size: 1.5rem; }
-    .subtitle {
-      margin: 0 0 16px;
-      color: var(--muted);
-      line-height: 1.6;
-    }
-
-    .field {
-      margin-bottom: 14px;
-    }
-    label {
-      display: block;
-      margin-bottom: 8px;
-      font-size: 0.82rem;
-      font-weight: 700;
-      color: var(--muted);
-      letter-spacing: 0.01em;
-    }
-    input, select, textarea {
-      width: 100%;
-      border: 1px solid var(--line-strong);
-      background: rgba(248,250,252,0.95);
-      color: var(--text);
-      border-radius: 12px;
-      padding: 11px 12px;
-      outline: none;
-      transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
-    }
-    input:focus, select:focus, textarea:focus {
-      border-color: rgba(18,102,229,0.72);
-      box-shadow: 0 0 0 4px rgba(18,102,229,0.12);
-      background: #fff;
-    }
-    textarea { resize: vertical; min-height: 92px; }
-    .inline-actions {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 10px;
-      margin-top: 18px;
-      flex-wrap: wrap;
-    }
-    .error {
-      min-height: 21px;
-      margin: 8px 0 0;
-      color: var(--danger);
-      font-size: 0.82rem;
-      font-weight: 600;
-    }
-
-    .screen-header {
-      margin-bottom: 18px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
-    .page-title {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 28px;
-      padding: 4px 10px;
-      border-radius: 999px;
-      background: var(--panel-soft);
-      border: 1px solid rgba(148,163,184,0.25);
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 700;
-    }
-    .badge.alert {
-      background: rgba(245,158,11,0.12);
-      border-color: rgba(245,158,11,0.25);
-      color: #92400e;
-    }
-    .badge.success {
-      background: var(--success-soft);
-      border-color: rgba(30,173,103,0.2);
-      color: #0d7d48;
-    }
-
-    .instance-list {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 18px;
-      margin-top: 18px;
-    }
-    .instance-card {
-      padding: 18px 18px 14px;
-      background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(244,249,255,0.9));
-    }
-    .instance-card h3 {
-      margin: 0 0 8px;
-      font-size: 1.18rem;
-    }
-    .instance-card p {
-      margin: 0 0 14px;
-      color: var(--muted);
-      line-height: 1.6;
-      min-height: 48px;
-    }
-    .instance-meta {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-bottom: 16px;
-    }
-    .instance-actions {
-      display: flex;
-      justify-content: flex-end;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .workspace-tabs {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin: 0 0 18px;
-      padding: 8px;
-      border-radius: 14px;
-      background: rgba(148,163,184,0.08);
-      border: 1px solid rgba(148,163,184,0.18);
-    }
-    .tab {
-      background: transparent;
-      border: 1px solid transparent;
-      border-radius: 10px;
-      color: var(--muted);
-      font-weight: 700;
-      padding: 10px 14px;
-    }
-    .tab.active {
-      background: linear-gradient(180deg, rgba(18,102,229,0.09), rgba(18,102,229,0.04));
-      border-color: rgba(18,102,229,0.16);
-      color: var(--primary-strong);
-    }
-
-    .transport-panel {
-      padding: 18px;
-      background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(244,248,255,0.82));
-    }
-
-    .toolbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-bottom: 16px;
-    }
-    .toolbar-title {
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      color: var(--text);
-    }
-    .toolbar-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .summary-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-      gap: 16px;
-      margin-bottom: 18px;
-    }
-    .stat {
-      padding: 18px 18px 16px;
-      background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(244,249,255,0.92));
-    }
-    .stat .label {
-      display: block;
-      margin-bottom: 8px;
-      color: var(--muted);
-      font-weight: 700;
-      font-size: 0.74rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-    }
-    .stat .value {
-      font-size: clamp(1.7rem, 2vw, 2.25rem);
-      font-weight: 800;
-      line-height: 1;
-    }
-    .stat .value small {
-      font-size: 0.68em;
-      font-weight: 700;
-      color: var(--muted);
-      margin-left: 6px;
-    }
-
-    .filter-grid {
-      display: grid;
-      grid-template-columns: 1.8fr repeat(3, minmax(140px, 1fr));
-      gap: 10px;
-      margin-bottom: 14px;
-      padding: 14px;
-      border: 1px solid rgba(148,163,184,0.18);
-      border-radius: 14px;
-      background: rgba(245,249,255,0.9);
-    }
-    .filter-grid .field {
-      margin: 0;
-    }
-    .filter-grid label {
-      margin-bottom: 6px;
-      font-size: 0.72rem;
-    }
-    .filter-grid input, .filter-grid select {
-      min-height: 40px;
-      padding: 9px 10px;
-      font-size: 0.9rem;
-    }
-
-    .table-wrap {
-      overflow: auto;
-      width: 100%;
-      border: 1px solid rgba(148,163,184,0.18);
-      border-radius: 16px;
-      background: rgba(255,255,255,0.82);
-    }
-    .table-wrap table {
-      width: 100%;
-      border-collapse: collapse;
-      min-width: 980px;
-    }
-    thead th {
-      background: linear-gradient(180deg, rgba(230,238,250,0.98), rgba(225,234,246,0.96));
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      font-size: 0.72rem;
-      padding: 12px 12px;
-      text-align: left;
-      border-bottom: 1px solid rgba(148,163,184,0.2);
-      white-space: nowrap;
-      position: sticky;
-      top: 0;
-      z-index: 2;
-    }
-    td {
-      padding: 12px;
-      border-bottom: 1px solid rgba(148,163,184,0.12);
-      vertical-align: middle;
-      color: var(--text);
-      background: rgba(255,255,255,0.5);
-    }
-    tbody tr:hover td {
-      background: rgba(18,102,229,0.025);
-    }
-    .row-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-    .status-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      min-height: 28px;
-      border-radius: 999px;
-      padding: 5px 10px;
-      font-size: 0.76rem;
-      font-weight: 700;
-      border: 1px solid rgba(148,163,184,0.18);
-      background: var(--panel-soft);
-      color: var(--muted);
-    }
-    .status-chip.primary {
-      background: rgba(18,102,229,0.1);
-      color: var(--primary-strong);
-      border-color: rgba(18,102,229,0.18);
-    }
-    .status-chip.success {
-      background: var(--success-soft);
-      color: #0a7c4e;
-      border-color: rgba(30,173,103,0.2);
-    }
-    .status-chip.warning {
-      background: var(--warning-soft);
-      color: #9a5e00;
-      border-color: rgba(245,158,11,0.2);
-    }
-    .status-chip.danger {
-      background: var(--danger-soft);
-      color: #b42318;
-      border-color: rgba(239,68,68,0.2);
-    }
-
-    .catalogue-layout {
-      display: grid;
-      grid-template-columns: minmax(240px, 320px) 1fr;
-      gap: 18px;
-    }
-    .side-menu {
-      padding: 16px;
-      align-self: start;
-    }
-    .side-menu .menu {
-      display: grid;
-      gap: 8px;
-    }
-    .side-item {
-      width: 100%;
-      text-align: left;
-      padding: 11px 12px;
-      border-radius: 10px;
-      background: transparent;
-      border: 1px solid transparent;
-      color: var(--muted);
-      font-weight: 700;
-    }
-    .side-item.active {
-      background: rgba(18,102,229,0.08);
-      border-color: rgba(18,102,229,0.14);
-      color: var(--primary-strong);
-    }
-    .catalogue-panel {
-      padding: 18px;
-    }
-    .catalogue-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 16px;
-      flex-wrap: wrap;
-    }
-    .catalogue-list {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 12px;
-    }
-    .tag-card {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 12px 12px;
-      border-radius: 12px;
-      border: 1px solid rgba(148,163,184,0.18);
-      background: rgba(248,250,252,0.82);
-    }
-    .tag-card .meta {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      min-width: 0;
-    }
-    .dot {
-      width: 10px; height: 10px;
-      border-radius: 50%;
-      background: var(--primary);
-      display: inline-block;
-      flex-shrink: 0;
-    }
-    .dot.local { background: var(--warning); }
-    .tag-name {
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      display: block;
-      min-width: 0;
-    }
-    .tag-actions {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(15, 23, 42, 0.54);
-      display: grid;
-      place-items: center;
-      z-index: 100;
-      padding: 18px;
-    }
-    .modal {
-      width: min(560px, 100%);
-      background: rgba(255,255,255,0.97);
-      border: 1px solid rgba(148,163,184,0.2);
-      border-radius: 20px;
-      box-shadow: var(--shadow);
-      padding: 18px 18px 16px;
-      max-height: 88vh;
-      overflow: auto;
-    }
-    .modal.large {
-      width: min(980px, 100%);
-    }
-    .modal .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 16px;
-    }
-    .muted { color: var(--muted); }
-    .row { display: flex; gap: 12px; flex-wrap: wrap; }
-    .row > * { flex: 1; min-width: 180px; }
-    .stack { display: grid; gap: 12px; }
-    .modal-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 18px;
-    }
-    .empty-state {
-      text-align: center;
-      padding: 32px 16px;
-      color: var(--muted);
-      font-weight: 600;
-    }
-
-    @media (max-width: 760px) {
-      .catalogue-layout,
-      .filter-grid {
-        grid-template-columns: 1fr;
-      }
-      .screen-header,
-      .toolbar,
-      .topbar {
-        align-items: flex-start;
-      }
-      .topbar {
-        height: auto;
-        padding: 14px 18px;
-      }
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HASTUS libre – V1 : Définition de réseau</title>
+<style>
+  /* ============ Style général — design system « V2 » (reprise des formes
+     et couleurs du prototype, appliquée à TOUTES les fonctionnalités
+     existantes de la V1.7 : rien n'est retiré). ============ */
+  :root {
+    --bg: #edf3fb; --bg-strong: #e7eef9;
+    --panel: rgba(255,255,255,0.9); --panel-strong: #ffffff;
+    --panel-soft: #f3f8ff; --panel-alt: #f5f7fb;
+    --line: #dfe8f4; --line-strong: #c7d7ee;
+    --text: #112236; --muted: #586d86;
+    --primary: #1266e5; --primary-strong: #0a4ab5;
+    --secondary: #1db4a6; --secondary-strong: #108a7c;
+    --warning: #f59e0b; --warning-soft: #fff4de;
+    --danger: #ef4444; --danger-soft: #fff1f2;
+    --success: #1ead67; --success-soft: #ebfff5;
+    --shadow: 0 20px 46px rgba(15, 28, 56, 0.12);
+    --shadow-soft: 0 8px 22px rgba(17, 38, 74, 0.08);
+    --radius: 20px; --radius-md: 16px; --radius-sm: 12px; --radius-xs: 10px;
+    --header-h: 76px;
+    font-family: Inter, "Segoe UI", system-ui, sans-serif; color: var(--text);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background:
+      radial-gradient(circle at top left, rgba(18,102,229,0.15), transparent 25%),
+      radial-gradient(circle at bottom right, rgba(29,180,166,0.12), transparent 30%),
+      var(--bg);
+  }
+  /* ---- Barre supérieure (toutes les vues) ---- */
+  .topbar {
+    min-height: var(--header-h);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 24px; gap: 12px; flex-wrap: wrap;
+    background: rgba(255,255,255,0.8); backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(145,164,190,0.25);
+    position: sticky; top: 0; z-index: 30;
+  }
+  .brand { display: inline-flex; align-items: center; gap: 12px; font-weight: 800; letter-spacing: 0.025em; color: var(--text); }
+  .brand-mark {
+    width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 12px; background: linear-gradient(135deg, rgba(18,102,229,0.12), rgba(29,180,166,0.18));
+    color: var(--primary); font-size: 1.2rem;
+  }
+  .logo { font-weight: 800; color: var(--text); font-size: 17px; cursor: pointer; background: none; border: none; }
+  .conteneur { width: min(1210px, calc(100% - 32px)); margin: 22px auto 40px; padding: 0; }
+  h1, h2, h3 { margin: 0 0 12px; }
+  h1 { font-size: clamp(1.6rem, 2.4vw, 2.1rem); }
+  h2 { font-size: 1.35rem; }
+  h3 { font-size: 1.1rem; }
+  /* ---- Cartes, badges, étiquettes ---- */
+  .carte { background: rgba(255,255,255,0.88); border: 1px solid rgba(148,163,184,0.2); border-radius: var(--radius); box-shadow: var(--shadow-soft); padding: 14px 16px; margin-bottom: 12px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+  .etiquette { display: inline-flex; align-items: center; min-height: 26px; padding: 3px 10px; border-radius: 999px; background: var(--panel-soft); border: 1px solid rgba(148,163,184,0.25); color: var(--muted); font-size: 12px; font-weight: 700; }
+  .etiquette.pub { background: var(--success-soft); border-color: rgba(30,173,103,0.25); color: #0d7d48; }
+  .etiquette.prive { background: var(--danger-soft); border-color: rgba(239,68,68,0.25); color: #b42318; }
+  .etiquette.alerte { background: var(--warning-soft); border-color: rgba(245,158,11,0.3); color: #92400e; }
+  /* ---- Boutons ---- */
+  button { cursor: pointer; border-radius: 10px; border: 1px solid var(--line-strong); background: var(--panel-strong); color: var(--text); padding: 9px 13px; font-size: 13px; font-weight: 600; transition: all 0.18s ease; box-shadow: 0 1px 0 rgba(15,28,56,0.03); }
+  button:hover { transform: translateY(-1px); }
+  button:active { transform: translateY(0); }
+  button:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+  .b-bleu { background: linear-gradient(135deg, var(--primary), var(--primary-strong)); border-color: var(--primary); color: #fff; box-shadow: 0 12px 24px rgba(18,102,229,0.2); }
+  .b-bleu:hover { background: linear-gradient(135deg, var(--primary), var(--primary-strong)); }
+  .b-vert { background: linear-gradient(135deg, var(--secondary), var(--secondary-strong)); border-color: var(--secondary); color: #fff; }
+  .b-vert:hover { background: linear-gradient(135deg, var(--secondary), var(--secondary-strong)); }
+  button.danger { background: linear-gradient(135deg, var(--danger), #dc2626); border-color: var(--danger); color: #fff; }
+  button.petit { padding: 6px 9px; font-size: 12px; }
+  /* ---- Onglets de l'espace de travail ---- */
+  .onglets { display: flex; gap: 8px; flex-wrap: wrap; padding: 8px; border-radius: 14px; background: rgba(148,163,184,0.08); border: 1px solid rgba(148,163,184,0.18); }
+  .onglet { background: transparent; border: 1px solid transparent; border-radius: 10px; color: var(--muted); font-weight: 700; padding: 9px 14px; }
+  .onglet.actif { background: linear-gradient(180deg, rgba(18,102,229,0.09), rgba(18,102,229,0.04)); border-color: rgba(18,102,229,0.16); color: var(--primary-strong); }
+  /* ---- Grille d'instances (accueil) : auto-fit, cartes à badges ---- */
+  .grille-instances { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; margin-top: 18px; }
+  .carte.instance-carte { display: block; background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(244,249,255,0.9)); }
+  .carte.instance-carte h3 { margin: 0 0 8px; font-size: 1.15rem; }
+  .carte.instance-carte .desc { color: var(--muted); line-height: 1.6; min-height: 44px; margin-bottom: 12px; font-size: 13px; }
+  .carte.instance-carte .meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .carte.instance-carte .actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+  /* ---- Capsules statistiques (page d'accueil de l'instance) ---- */
+  .resume { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; margin-bottom: 18px; }
+  .stat { display: block; background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(244,249,255,0.92)); border: 1px solid rgba(148,163,184,0.2); border-radius: var(--radius); box-shadow: var(--shadow-soft); padding: 16px 18px 14px; margin: 0; }
+  .stat .libelle { display: block; margin-bottom: 8px; color: var(--muted); font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  .stat .valeur { font-size: clamp(1.5rem, 2vw, 2rem); font-weight: 800; line-height: 1; }
+  .stat .valeur small { font-size: 0.62em; font-weight: 700; color: var(--muted); margin-left: 6px; }
+  /* ---- Panneau « tableau de gestion des lignes » + barre de filtres ---- */
+  .panneau-travail { display: block; padding: 18px; background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(244,248,255,0.82)); border: 1px solid rgba(148,163,184,0.2); border-radius: var(--radius); box-shadow: var(--shadow-soft); }
+  .barre-outils { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  .barre-outils .titre { font-weight: 800; letter-spacing: 0.02em; color: var(--text); }
+  .barre-outils .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .barre-filtres { display: grid; grid-template-columns: 1.6fr repeat(4, minmax(130px, 1fr)); gap: 10px; margin-bottom: 14px; padding: 14px; border: 1px solid rgba(148,163,184,0.18); border-radius: 14px; background: rgba(245,249,255,0.9); }
+  .barre-filtres .champ { margin: 0; }
+  .barre-filtres label { margin-bottom: 6px; font-size: 0.72rem; }
+  .barre-filtres input, .barre-filtres select { min-height: 38px; padding: 8px 10px; font-size: 0.9rem; }
+  @media (max-width: 900px) { .barre-filtres { grid-template-columns: 1fr 1fr; } }
+  /* ---- Tableaux ---- */
+  table { width: 100%; border-collapse: collapse; background: transparent; font-size: 13px; }
+  th { background: linear-gradient(180deg, rgba(230,238,250,0.98), rgba(225,234,246,0.96)); text-align: left; padding: 10px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); border-bottom: 1px solid rgba(148,163,184,0.2); white-space: nowrap; }
+  td { padding: 8px 10px; border-bottom: 1px solid rgba(148,163,184,0.12); vertical-align: middle; background: rgba(255,255,255,0.5); }
+  tr:hover td { background: rgba(18,102,229,0.03); }
+  .enveloppe-table { border: 1px solid rgba(148,163,184,0.18); border-radius: 14px; overflow-x: auto; width: 100%; background: rgba(255,255,255,0.82); }
+  .enveloppe-table table { min-width: 100%; }
+  td.cell-std { background: rgba(18,102,229,0.07); }
+  td.cell-loc { background: var(--warning-soft); }
+  th.th-oblig { background: linear-gradient(180deg, #ecfeff, #e0f7fa); color: #155e75; }
+  .ico { border: none; background: none; padding: 2px 4px; font-size: 14px; cursor: pointer; color: var(--muted); }
+  .ico:hover { color: var(--primary); }
+  /* ---- Champs de saisie ---- */
+  input, select, textarea { border: 1px solid var(--line-strong); background: rgba(248,250,252,0.95); color: var(--text); border-radius: 12px; padding: 10px 12px; font-size: 14px; font-family: inherit; width: 100%; outline: none; transition: border-color 0.18s ease, box-shadow 0.18s ease; }
+  input:focus, select:focus, textarea:focus { border-color: rgba(18,102,229,0.72); box-shadow: 0 0 0 4px rgba(18,102,229,0.12); background: #fff; }
+  textarea { resize: vertical; }
+  .champ { margin-bottom: 12px; }
+  .champ label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 4px; color: var(--muted); }
+  .grille { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 700px) { .grille { grid-template-columns: 1fr; } }
+  .libelle { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--panel-strong); border-radius: 10px; padding: 4px 10px; font-size: 13px; margin: 3px; }
+  .libelle button { border: none; background: none; padding: 0 2px; color: #94a3b8; }
+  .libelle button:hover { color: var(--primary); }
+  /* ---- Fenêtres modales ---- */
+  .modal-fond { position: fixed; inset: 0; background: rgba(15,23,42,0.54); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 18px; }
+  .modal { background: rgba(255,255,255,0.97); border: 1px solid rgba(148,163,184,0.2); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; width: 100%; max-width: 560px; max-height: 88vh; overflow-y: auto; }
+  .ligne-boutons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; flex-wrap: wrap; }
+  /* ---- Suppression sensible (double clic en 3 s) ---- */
+  .suppr { position: relative; overflow: hidden; border: 1px solid var(--line-strong); background: var(--panel-strong); color: var(--muted); font-size: 12px; }
+  .suppr.armed { background: var(--danger); color: #fff; border-color: var(--danger); }
+  .suppr .barre { position: absolute; left: 0; top: 0; bottom: 0; background: #b91c1c; width: 100%; }
+  .suppr.armed .barre { animation: vide 3s linear forwards; }
+  @keyframes vide { from { width: 100%; } to { width: 0%; } }
+  /* ---- Menu ⚙ Colonnes (panneau ancré) ---- */
+  .menu-col { position: relative; display: inline-block; }
+  .panneau { position: absolute; right: 0; top: 100%; background: var(--panel-strong); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-soft); padding: 10px; width: 340px; z-index: 30; margin-top: 6px; }
+  .panneau label { display: flex; align-items: center; gap: 8px; padding: 4px 6px; font-size: 13px; }
+  .p-ligne { display: grid; grid-template-columns: 1fr 5fr 1fr 1fr; align-items: center; gap: 8px; padding: 6px 10px; font-size: 13px; border-bottom: 1px solid rgba(148,163,184,0.12); }
+  .p-ligne input { justify-self: center; }
+  .p-ligne > span { justify-self: start; }
+  .p-ligne button { justify-self: center; width: 26px; height: 24px; padding: 0; }
+  /* ---- Divers ---- */
+  .vue-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .vue-switch button { border: none; background: var(--panel-strong); padding: 6px 12px; font-size: 13px; border-radius: 0; box-shadow: none; }
+  .vue-switch button.actif { background: rgba(18,102,229,0.09); color: var(--primary-strong); font-weight: 700; }
+  .erreur { color: var(--danger); font-size: 13px; font-weight: 600; margin-top: 4px; }
+  .inline-flex { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .info-txt { font-size: 13px; color: var(--muted); }
+  .tests-ok { color: var(--success); font-weight: 600; }
+  .tests-ko { color: var(--danger); font-weight: 600; }
+  .pastille { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+  .pastille.std { background: var(--primary); }
+  .pastille.loc { background: var(--warning); }
+  /* ---- Catalogue : onglets verticaux à gauche, contenu à droite ---- */
+  .catalogue-disposition { display: grid; grid-template-columns: minmax(220px, 280px) 1fr; gap: 18px; align-items: start; }
+  @media (max-width: 760px) { .catalogue-disposition { grid-template-columns: 1fr; } }
+  .menu-gauche { padding: 12px; background: rgba(255,255,255,0.88); border: 1px solid rgba(148,163,184,0.2); border-radius: var(--radius); box-shadow: var(--shadow-soft); }
+  .menu-gauche .onglet { display: block; width: 100%; text-align: left; padding: 10px 12px; border-radius: 10px; }
+  .panneau-catalogue { padding: 18px; background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(244,248,255,0.82)); border: 1px solid rgba(148,163,184,0.2); border-radius: var(--radius); box-shadow: var(--shadow-soft); }
+  /* ---- Icône ℹ️ : au survol, une bulle sombre affiche l'explication. ---- */
+  .aide-info { position: relative; cursor: help; }
+  .aide-info:hover::after {
+    content: attr(data-info); position: absolute; top: 120%; left: 50%; transform: translateX(-50%);
+    background: #0f172a; color: #fff; padding: 8px 10px; border-radius: 8px;
+    font-size: 12px; font-weight: 400; width: 300px; white-space: normal; z-index: 60;
+  }
+</style>
 </head>
 <body>
-  <div id="app"></div>
+<div id="app"></div>
+<script>
+/* ================================================================
+   HASTUS libre – Version 1 : bloc « Définition du réseau »
+   ----------------------------------------------------------------
+   ARCHITECTURE MODULAIRE (chaque section est indépendante) :
+   1. NOYAU   : logique métier pure, sans aucune référence à l'affichage.
+                C'est cette partie que les tests automatiques vérifient.
+   2. BD      : sauvegarde locale (localStorage = dans ce navigateur).
+   3. VUES    : affichage des écrans (identification, accueil, espace de travail).
+   4. TESTS   : suite de tests automatiques exécutée sur le noyau.
+   ================================================================ */
 
-  <script>
-    const STORAGE_KEY = 'hastus_libre_v2';
+/* ============ 1. NOYAU : logique métier pure ============ */
+const Noyau = (() => {
 
-    const DEFAULT_DATA = () => ({
-      users: [],
-      session: null,
-      instances: [],
-      data: {},
-      lastView: 'lines'
+  /* Structure de données d'une instance neuve.
+     Le catalogue par défaut est aligné sur les vocabulaires NeTEx/GTFS. */
+  const instanceNeuve = () => ({
+    reseaux: [],   // [{id, nom, validiteDebut, validiteFin}]
+    contrats: [],  // [{id, nom, reseaux:[ids], prive:true}]
+    lignes: [],    // [{id, abrev, nom, reseauId, contratId, activite, mode, groupe, vehicules:[], energies:[], fonctions:[]}]
+    /* Le catalogue : un « classeur » dont chaque catégorie est un onglet.
+       - labels : [{nom, origine: "standard"|"local", codes: {export: "3"}}]
+         "standard" = issu des référentiels GTFS/NeTEx (bleu) ;
+         "local" = ajouté ou modifié par l'utilisateur (orange).
+       - colonnes : colonnes de codes d'export, remplies par l'utilisateur. */
+    catalogue: {
+      "Activités": catNeuve(["Urbaine", "Régulière (interurbaine)", "Scolaire", "À la demande", "Navette"]),
+      "Modes de transport": catNeuve([["Tramway", "0"], ["Métro", "1"], ["Autobus", "3"], ["Autocar", "3"], ["Trolleybus", "11"]],
+        v => ({ nom: v[0], origine: "standard", codes: { export: v[1] } })),
+      "Types de véhicule": catNeuve(["Bus standard 12 m", "Bus articulé 18 m", "Car 13 m", "Minibus"]),
+      "Types d'énergie": catNeuve(["Gasoil", "HVO", "Électrique", "GNV", "Hybride"]),
+      "Fonctions embarquées": catNeuve(["Wi-Fi", "PMR", "Emport vélo", "Prise USB", "Écran info voyageurs"]),
+      "Groupes de lignes": catNeuve([])   // sert au network_id des exports GTFS/NeTEx
+    },
+    colonnesCalculees: [], // colonnes compteur définies par l'utilisateur (onglet dédié)
+    compteur: 1 // générateur d'identifiants locaux à l'instance
+  });
+
+  /* Fabrique une catégorie du catalogue : liste de labels + colonne d'export. */
+  const catNeuve = (valeurs, vers) => ({
+    colonnes: ["export"],
+    labels: valeurs.map(vers || (v => ({ nom: v, origine: "standard", codes: {} })))
+  });
+
+  const nouvelId = (data) => "o" + (data.compteur++);
+
+  /* Règle métier : une ligne = abréviation unique + 1 activité + 1 mode,
+     plusieurs véhicules / énergies / fonctions. Retourne une liste d'erreurs. */
+  function validerLigne(data, ligne, ignoreId) {
+    const errs = [];
+    if (!ligne.abrev || !ligne.abrev.trim()) errs.push("Abréviation obligatoire.");
+    else if (ligne.abrev.trim().length > 8) errs.push("Abréviation : 8 caractères maximum.");
+    else if (data.lignes.some(l => l.abrev.toLowerCase() === ligne.abrev.trim().toLowerCase()
+              && l.id !== ignoreId)) errs.push("Abréviation déjà utilisée dans cette instance.");
+    if (!ligne.nom || !ligne.nom.trim()) errs.push("Nom commercial obligatoire.");
+    else if (ligne.nom.trim().length > 64) errs.push("Nom commercial : 64 caractères maximum.");
+    if (!ligne.reseauId) errs.push("Réseau obligatoire.");
+    if (!ligne.activite) errs.push("Activité obligatoire (une seule).");
+    if (!ligne.mode) errs.push("Mode de transport obligatoire (un seul).");
+    return errs;
+  }
+
+  /* Catalogue : ajout (doublons refusés), modification, suppression.
+     origine "standard" (référentiel GTFS/NeTEx, couleur bleue) ou
+     "local" (ajouté/modifié par l'utilisateur, couleur orange). */
+  function ajouterLabel(data, categorie, valeur, origine) {
+    const v = (valeur || "").trim().slice(0, 32);   // 32 caractères max
+    const cat = data.catalogue[categorie];
+    if (!v) return { ok: false, erreur: "Label vide." };
+    if ((valeur || "").trim().length > 32) return { ok: false, erreur: "32 caractères maximum pour un label." };
+    if (cat.labels.some(x => x.nom.toLowerCase() === v.toLowerCase()))
+      return { ok: false, erreur: "Ce label existe déjà." };
+    cat.labels.push({ nom: v, origine: origine || "local", codes: {} });
+    return { ok: true };
+  }
+  function modifierLabel(data, categorie, index, valeur) {
+    const v = (valeur || "").trim();
+    if (!v) return { ok: false, erreur: "Label vide." };
+    if (v.length > 32) return { ok: false, erreur: "32 caractères maximum pour un label." };
+    const l = data.catalogue[categorie].labels[index];
+    const ancien = l.nom;
+    l.nom = v;
+    l.origine = "local"; // un label modifié par l'utilisateur passe en orange
+    // Répercussion : les lignes qui utilisaient l'ancien nom suivent le
+    // renommage (sinon elles pointeraient vers un label qui n'existe plus).
+    renommerDansLignes(data, categorie, ancien, v);
+    return { ok: true };
+  }
+  function supprimerLabel(data, categorie, index) {
+    const l = data.catalogue[categorie].labels[index];
+    if (!l) return { ok: false, erreur: "Label introuvable." };
+    // Règle métier (Jules) : un label UTILISÉ par des lignes ne se supprime pas.
+    const usages = usagesLabel(data, categorie, l.nom);
+    if (usages.length)
+      return { ok: false, erreur: `Impossible : utilisé par ${usages.length} ligne(s) — ${usages.slice(0, 3).map(x => x.abrev).join(", ")}${usages.length > 3 ? "…" : ""}. Détachez-le d'abord (bouton 🔎).` };
+    data.catalogue[categorie].labels.splice(index, 1);
+    return { ok: true };
+  }
+
+  /* ---- Cartographie des usages (demande de Jules : « où est-ce utilisé ? »)
+     Chaque catégorie du catalogue alimente un champ des lignes. */
+  const USAGES_CATALOGUE = {
+    "Activités":            { prop: "activite" },
+    "Modes de transport":   { prop: "mode" },
+    "Groupes de lignes":    { prop: "groupe" },
+    "Types de véhicule":    { prop: "vehicules", multiple: true },
+    "Types d'énergie":      { prop: "energies", multiple: true },
+    "Fonctions embarquées": { prop: "fonctions", multiple: true }
+  };
+  /* Les lignes qui utilisent ce label du catalogue. */
+  function usagesLabel(data, categorie, nom) {
+    const u = USAGES_CATALOGUE[categorie];
+    if (!u) return [];
+    const memeNom = v => (v || "").toLowerCase() === nom.toLowerCase();
+    return data.lignes.filter(l => u.multiple ? (l[u.prop] || []).some(memeNom) : memeNom(l[u.prop]));
+  }
+  /* Renomme un label dans toutes les lignes qui l'utilisent. */
+  function renommerDansLignes(data, categorie, ancien, nouveau) {
+    const u = USAGES_CATALOGUE[categorie];
+    if (!u) return;
+    data.lignes.forEach(l => {
+      if (u.multiple) l[u.prop] = (l[u.prop] || []).map(x => x.toLowerCase() === ancien.toLowerCase() ? nouveau : x);
+      else if ((l[u.prop] || "").toLowerCase() === ancien.toLowerCase()) l[u.prop] = nouveau;
     });
+  }
 
-    const state = {
-      currentUser: null,
-      instance: null,
-      view: 'lines',
-      catalogSection: 'Activités',
-      columns: ['abrev', 'nom', 'reseau', 'contrat', 'activite', 'mode', 'groupe'],
-      tableFilters: {
-        query: '',
-        network: 'all',
-        activity: 'all',
-        mode: 'all',
-        sortBy: 'abrev',
-        sortDir: 'asc'
+  /* ---- Règles d'unicité et usages des réseaux / contrats ---- */
+  /* Un nom identifie un objet : deux réseaux (ou deux contrats) de même
+     nom sont interdits — c'est le « code unique » au niveau réseau/contrat. */
+  function nomUtilise(liste, nom, ignoreId) {
+    return liste.some(x => x.id !== ignoreId && x.nom.trim().toLowerCase() === nom.trim().toLowerCase());
+  }
+  function usagesReseau(data, id) {
+    return {
+      lignes: data.lignes.filter(l => l.reseauId === id),
+      contrats: data.contrats.filter(c => (c.reseaux || []).includes(id))
+    };
+  }
+  function usagesContrat(data, id) {
+    return { lignes: data.lignes.filter(l => l.contratId === id) };
+  }
+  /* Doublons de codes d'export dans une catégorie : chaque code doit être
+     unique (il identifiera le label dans les exports GTFS/NeTEx). */
+  function doublonsCodes(data, categorie, colonne) {
+    const vus = new Set(), doublons = new Set();
+    data.catalogue[categorie].labels.forEach(l => {
+      const c = (l.codes[colonne] || "").trim();
+      if (c && vus.has(c)) doublons.add(c);
+      vus.add(c);
+    });
+    return [...doublons];
+  }
+  /* Valeur d'une colonne calculée utilisateur (testée par la suite). */
+  function valeurColCalculee(ligne, def) { return (ligne[def.cible] || []).length; }
+
+  /* Référentiel des standards (aligné GTFS / NeTEx). Le bouton « Mettre à
+     jour » de la vue Catalogue ajoute automatiquement les valeurs manquantes,
+     marquées "standard" (bleu), avec leur code GTFS pré-rempli quand il
+     existe (ex. route_type des modes de transport). Structure prête à être
+     alimentée plus tard par une API : il suffit d'enrichir ce référentiel. */
+  const REFERENTIEL = {
+    "Activités": [["Navette nocturne", ""], ["Transport de substitution", ""]],
+    "Modes de transport": [["Train / RER", "2"], ["Ferry / bateau", "4"], ["Téléphérique", "6"], ["Funiculaire", "7"]],
+    "Types de véhicule": [["Midibus", ""], ["Bus bi-articulé 24 m", ""], ["Autocar double étage", ""]],
+    "Types d'énergie": [["Hydrogène", ""], ["BioGNV", ""], ["Électrique batterie", ""]],
+    "Fonctions embarquées": [["Climatisation", ""], ["Validation sans contact", ""], ["Bandeau lumineux extérieur", ""], ["Annonces sonores", ""]],
+    "Groupes de lignes": []
+  };
+  function majReferentiel(data) {
+    let ajoutes = 0;
+    Object.entries(REFERENTIEL).forEach(([categorie, valeurs]) => {
+      valeurs.forEach(([v, code]) => {
+        const r = ajouterLabel(data, categorie, v, "standard");
+        if (r.ok) {
+          if (code) data.catalogue[categorie].labels[data.catalogue[categorie].labels.length - 1].codes["export"] = code;
+          ajoutes++;
+        }
+      });
+    });
+    return { ajoutes };
+  }
+
+  /* Import en masse depuis Excel. Colonnes : Abrév, Nom, Réseau, Contrat,
+     Activité, Mode, Groupe (l'abréviation est la clé : existante → mise à
+     jour, nouvelle → création).
+     Règles métier (Jules) :
+     - une valeur obligatoire inconnue (réseau, activité, mode, groupe) est
+       CRÉÉE automatiquement ; le badge ⚠ du catalogue rappellera qu'elle
+       doit être paramétrée (code d'export) ;
+     - les lignes « suspectes » (même nom commercial qu'une ligne existante)
+       sont signalées pour validation avant l'import ;
+     - le contrat, non obligatoire, n'est jamais créé automatiquement :
+     il n'est relié que s'il existe déjà. */
+  function appliquerColle(data, texte) {
+    const res = { maj: 0, crees: 0, ignorees: 0, nouvellesValeurs: {}, suspects: [] };
+    // OPTIMISATION : index (Maps) construits UNE fois — chaque ligne du
+    // fichier est rattachée en accès direct O(1) au lieu de relire tout
+    // le tableau à chaque find() (sur un gros import : très gros gain).
+    const parAbrev = new Map(data.lignes.map(l => [l.abrev.toLowerCase(), l]));
+    const parNomLigne = new Map(data.lignes.map(l => [l.nom.toLowerCase(), true]));
+    const reseauxParNom = new Map(data.reseaux.map(r => [r.nom.toLowerCase(), r]));
+    const contratsParNom = new Map(data.contrats.map(c => [c.nom.toLowerCase(), c]));
+    const catLabels = {};   // catégorie → Map des labels existants (minuscules)
+    const labelsCat = (cat) => catLabels[cat] ||
+      (catLabels[cat] = new Map(data.catalogue[cat].labels.map(x => [x.nom.toLowerCase(), true])));
+    // Crée la valeur dans le catalogue si inconnue (marquée "local", orange).
+    const marquer = (cat, v) => {
+      if (!labelsCat(cat).has(v.toLowerCase())) {
+        labelsCat(cat).set(v.toLowerCase(), true);
+        ajouterLabel(data, cat, v, "local");
+        (res.nouvellesValeurs[cat] = res.nouvellesValeurs[cat] || []).push(v);
       }
     };
-
-    const storage = {
-      load() {
-        try {
-          const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
-          if (!parsed) return DEFAULT_DATA();
-          return {
-            ...DEFAULT_DATA(),
-            ...parsed,
-            users: parsed.users || [],
-            instances: parsed.instances || [],
-            data: parsed.data || {}
-          };
-        } catch (error) {
-          return DEFAULT_DATA();
-        }
-      },
-      save(data) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    // Réseau obligatoire : un nom inconnu est créé immédiatement.
+    const reseauDe = (nomR) => {
+      let r = reseauxParNom.get(nomR.toLowerCase());
+      if (!r) {
+        r = { id: nouvelId(data), nom: nomR, validiteDebut: "", validiteFin: "" };
+        data.reseaux.push(r);
+        reseauxParNom.set(nomR.toLowerCase(), r);
+        (res.nouvellesValeurs["Réseaux"] = res.nouvellesValeurs["Réseaux"] || []).push(nomR);
       }
+      return r;
     };
-
-    function uid(prefix) {
-      return prefix + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-    }
-
-    function createEmptyData() {
-      return {
-        networks: [],
-        contracts: [],
-        lines: [],
-        catalogue: {
-          'Activités': {
-            labels: [
-              { nom: 'Urbaine', origin: 'standard', codes: {} },
-              { nom: 'Régulière (interurbaine)', origin: 'standard', codes: {} },
-              { nom: 'Scolaire', origin: 'standard', codes: {} },
-              { nom: 'À la demande', origin: 'standard', codes: {} },
-              { nom: 'Navette', origin: 'standard', codes: {} }
-            ],
-            columns: ['export']
-          },
-          'Modes de transport': {
-            labels: [
-              { nom: 'Tramway', origin: 'standard', codes: { export: '0' } },
-              { nom: 'Métro', origin: 'standard', codes: { export: '1' } },
-              { nom: 'Autobus', origin: 'standard', codes: { export: '3' } },
-              { nom: 'Autocar', origin: 'standard', codes: { export: '3' } },
-              { nom: 'Trolleybus', origin: 'standard', codes: { export: '11' } }
-            ],
-            columns: ['export']
-          },
-          'Types de véhicule': { labels: [{ nom: 'Bus standard 12 m', origin: 'standard', codes: {} }, { nom: 'Bus articulé 18 m', origin: 'standard', codes: {} }, { nom: 'Car 13 m', origin: 'standard', codes: {} }, { nom: 'Minibus', origin: 'standard', codes: {} }], columns: ['export'] },
-          'Types d\'énergie': { labels: [{ nom: 'Gasoil', origin: 'standard', codes: {} }, { nom: 'HVO', origin: 'standard', codes: {} }, { nom: 'Électrique', origin: 'standard', codes: {} }, { nom: 'GNV', origin: 'standard', codes: {} }, { nom: 'Hybride', origin: 'standard', codes: {} }], columns: ['export'] },
-          'Fonctions embarquées': { labels: [{ nom: 'Wi-Fi', origin: 'standard', codes: {} }, { nom: 'PMR', origin: 'standard', codes: {} }, { nom: 'Emport vélo', origin: 'standard', codes: {} }, { nom: 'Prise USB', origin: 'standard', codes: {} }, { nom: 'Écran info voyageurs', origin: 'standard', codes: {} }], columns: ['export'] },
-          'Groupes de lignes': { labels: [], columns: ['export'] }
-        },
-        customColumns: [],
-        counter: 1
-      };
-    }
-
-    function getStore() {
-      return storage.load();
-    }
-
-    function currentUser() {
-      const data = getStore();
-      return data.users.find(u => u.id === data.session) || null;
-    }
-
-    function saveStore(data) {
-      storage.save(data);
-    }
-
-    function getInstanceData(instanceId) {
-      const data = getStore();
-      return data.data[instanceId] || createEmptyData();
-    }
-
-    function getVisibleInstances() {
-      const data = getStore();
-      const user = currentUser();
-      if (!user) return [];
-      return data.instances.filter(inst => user.admin || inst.ownerId === user.id || (inst.members || []).includes(user.id));
-    }
-
-    function escapeHtml(value) {
-      return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]));
-    }
-
-    function render() {
-      const app = document.getElementById('app');
-      const user = currentUser();
-
-      if (!user) {
-        app.innerHTML = renderLogin();
-        bindLogin();
-        return;
-      }
-
-      if (!state.instance) {
-        app.innerHTML = renderDashboard(user);
-        bindDashboard();
-        return;
-      }
-
-      app.innerHTML = renderWorkspace(user);
-      bindWorkspace();
-    }
-
-    function renderLogin() {
-      return `
-        <div class="app-shell">
-          <header class="topbar">
-            <div class="brand">
-              <span class="brand-mark">🚌</span>
-              <span>HASTUS libre</span>
-            </div>
-            <div class="topbar-actions">
-              <span class="badge">Version 2 · Réseau</span>
-            </div>
-          </header>
-          <main class="auth-wrap">
-            <section class="auth-card">
-              <h1>Connexion</h1>
-              <p class="subtitle">Accédez à vos instances de travail et gérez vos lignes, réseaux, contrats et catalogues.</p>
-              <div class="field">
-                <label for="username">Nom d'utilisateur</label>
-                <input id="username" autocomplete="username" />
-              </div>
-              <div class="field">
-                <label for="password">Mot de passe</label>
-                <input id="password" type="password" autocomplete="current-password" />
-              </div>
-              <div class="error" id="authError"></div>
-              <div class="inline-actions">
-                <button id="loginBtn" class="primary">Se connecter</button>
-                <button id="registerBtn">Créer un compte</button>
-              </div>
-            </section>
-          </main>
-        </div>
-      `;
-    }
-
-    function bindLogin() {
-      const loginBtn = document.getElementById('loginBtn');
-      const registerBtn = document.getElementById('registerBtn');
-      const username = document.getElementById('username');
-      const password = document.getElementById('password');
-      const errorBox = document.getElementById('authError');
-
-      const handleSubmit = (mode) => {
-        const name = username.value.trim();
-        const pass = password.value;
-        const store = getStore();
-        if (!name || pass.length < 4) {
-          errorBox.textContent = 'Le nom et le mot de passe sont obligatoires. (4 caractères minimum)';
-          return;
-        }
-
-        if (mode === 'login') {
-          const user = store.users.find(u => u.name.toLowerCase() === name.toLowerCase() && u.password === btoa(pass));
-          if (!user) {
-            errorBox.textContent = 'Identifiants incorrects.';
-            return;
-          }
-          store.session = user.id;
-          saveStore(store);
-          render();
-          return;
-        }
-
-        if (store.users.some(u => u.name.toLowerCase() === name.toLowerCase())) {
-          errorBox.textContent = 'Ce nom d\'utilisateur existe déjà.';
-          return;
-        }
-
-        const newUser = {
-          id: uid('u'),
-          name,
-          password: btoa(pass),
-          admin: store.users.length === 0
+    const lignesCollees = texte.trim().split(/\r?\n/).filter(r => r.trim());
+    lignesCollees.forEach((row, idx) => {
+      const c = row.split(/\t|;/);
+      // Ignore la ligne d'en-tête si elle commence par "Abrév" (cas du copier-coller depuis l'export).
+      if (idx === 0 && /^abr/i.test((c[0] || "").trim())) return;
+      const abrev = (c[0] || "").trim();
+      if (!abrev) { res.ignorees++; return; }
+      // Limites (identiques à la saisie manuelle) : abréviation 8 car.,
+      // nom 64 car. — la ligne est ignorée si elle ne les respecte pas.
+      if (abrev.length > 8) { res.ignorees++; return; }
+      const nom = (c[1] || "").trim();
+      if (nom.length > 64) { res.ignorees++; return; }
+      // Champs libres (réseau, contrat, activité, mode, groupe) : 32 car.
+      const reseauNom = (c[2] || "").trim().slice(0, 32);
+      const contratNom = (c[3] || "").trim().slice(0, 32);
+      const activite = (c[4] || "").trim().slice(0, 32);
+      const mode = (c[5] || "").trim().slice(0, 32);
+      const groupe = (c[6] || "").trim().slice(0, 32);
+      const existante = parAbrev.get(abrev.toLowerCase());
+      if (existante) {
+        if (nom) { existante.nom = nom; parNomLigne.set(nom.toLowerCase(), true); }
+        if (reseauNom) existante.reseauId = reseauDe(reseauNom).id;
+        if (contratNom) { const ct = contratsParNom.get(contratNom.toLowerCase()); if (ct) existante.contratId = ct.id; }
+        if (activite) { marquer("Activités", activite); existante.activite = activite; }
+        if (mode) { marquer("Modes de transport", mode); existante.mode = mode; }
+        if (groupe) { marquer("Groupes de lignes", groupe); existante.groupe = groupe; }
+        res.maj++;
+      } else {
+        // Suspect (demande de Jules) : même nom commercial qu'une ligne
+        // existante, abréviation différente → validation demandée.
+        if (nom && parNomLigne.has(nom.toLowerCase()))
+          res.suspects.push({ abrev, nom });
+        const r = reseauNom ? reseauDe(reseauNom) : null;
+        const ct = contratNom ? contratsParNom.get(contratNom.toLowerCase()) : null;
+        if (activite) marquer("Activités", activite);
+        if (mode) marquer("Modes de transport", mode);
+        if (groupe) marquer("Groupes de lignes", groupe);
+        const nouvelle = {
+          id: nouvelId(data), abrev, nom,
+          reseauId: r ? r.id : null, contratId: ct ? ct.id : null,
+          activite, mode, groupe,
+          vehicules: [], energies: [], fonctions: []
         };
-        store.users.push(newUser);
-        store.session = newUser.id;
-        saveStore(store);
-        render();
+        data.lignes.push(nouvelle);
+        parAbrev.set(abrev.toLowerCase(), nouvelle);
+        if (nom) parNomLigne.set(nom.toLowerCase(), true);
+        res.crees++;
+      }
+    });
+    return res;
+  }
+
+  /* Export du tableau au format TSV (collable directement dans Excel). */
+  function exporterTSV(data, cles) {
+    const entetes = cles.join("\t");
+    const corps = data.lignes.map(l => cles.map(c => l[c] || "").join("\t"));
+    return [entetes, ...corps].join("\n");
+  }
+
+  return { instanceNeuve, nouvelId, validerLigne, ajouterLabel, modifierLabel, supprimerLabel, appliquerColle, exporterTSV, majReferentiel,
+           usagesLabel, renommerDansLignes, nomUtilise, usagesReseau, usagesContrat, doublonsCodes, valeurColCalculee };
+})();
+
+/* ============ 2. BD : persistance locale ============ */
+const BD = (() => {
+  const CLE = "hastus_libre_v1";
+  let etat = null;
+  /* Identifiant unique : horodatage + suffixe aléatoire. L'horodatage seul
+     peut donner le MÊME id à deux créations dans la même milliseconde (bug
+     découvert par la suite de tests : deux utilisateurs créés à la suite
+     partageaient leur id, donc leurs instances !). Le suffixe aléatoire
+     rend la collision impossible. */
+  const uid = (p) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+  function charger() {
+    try { etat = JSON.parse(localStorage.getItem(CLE)) || null; } catch (e) { etat = null; }
+    if (!etat) etat = { utilisateurs: [], session: null, instances: [], donnees: {} };
+    migrer(etat);
+    return etat;
+  }
+  /* Migration : met à jour les données existantes vers le format actuel.
+     Le catalogue a évolué (listes de textes → classeurs avec codes d'export
+     et origine des labels). Sans cette étape, des données sauvegardées avec
+     une version précédente deviendraient illisibles : la compatibilité
+     ascendante est la règle d'or des mises à jour. */
+  function migrer(e) {
+    Object.values(e.donnees || {}).forEach(d => {
+      if (d.catalogue) Object.entries(d.catalogue).forEach(([categorie, val]) => {
+        if (Array.isArray(val)) // ancien format : simple liste de textes
+          d.catalogue[categorie] = { colonnes: ["export"], labels: val.map(v => ({ nom: v, origine: "standard", codes: {} })) };
+      });
+      if (d.catalogue && !d.catalogue["Groupes de lignes"])
+        d.catalogue["Groupes de lignes"] = { colonnes: ["export"], labels: [] };
+      if (!d.colonnesCalculees) d.colonnesCalculees = [];
+      (d.lignes || []).forEach(l => { if (l.groupe === undefined) l.groupe = ""; });
+    });
+  }
+  function sauver() { localStorage.setItem(CLE, JSON.stringify(etat)); }
+  function lire() { if (!etat) charger(); return etat; }
+
+  /* Identification locale (V1 : tout reste dans CE navigateur —
+     la gestion en ligne avec vrais comptes viendra dans un bloc ultérieur). */
+  function inscrire(nom, motDePasse) {
+    const e = lire();
+    if (e.utilisateurs.some(u => u.nom.toLowerCase() === nom.trim().toLowerCase()))
+      return { ok: false, erreur: "Ce nom d'utilisateur existe déjà." };
+    if (!nom.trim() || motDePasse.length < 4)
+      return { ok: false, erreur: "Nom requis, mot de passe de 4 caractères minimum." };
+    // Le PREMIER utilisateur créé devient administrateur.
+    const u = { id: uid("u"), nom: nom.trim(), mdp: btoa(motDePasse), admin: e.utilisateurs.length === 0 };
+    e.utilisateurs.push(u); e.session = u.id; sauver();
+    return { ok: true };
+  }
+  function connecter(nom, motDePasse) {
+    const e = lire();
+    const u = e.utilisateurs.find(u => u.nom.toLowerCase() === nom.trim().toLowerCase() && u.mdp === btoa(motDePasse));
+    if (!u) return { ok: false, erreur: "Identifiants incorrects." };
+    e.session = u.id; sauver(); return { ok: true };
+  }
+  function deconnecter() { lire().session = null; sauver(); }
+  function utilisateurCourant() { const e = lire(); return e.utilisateurs.find(u => u.id === e.session) || null; }
+
+  /* Instances : chaque instance est isolée (droits + données). */
+  function mesInstances() {
+    const e = lire(); const u = utilisateurCourant();
+    if (!u) return [];
+    return e.instances.filter(i => u.admin || i.proprio === u.id || (i.membres || []).includes(u.id));
+  }
+  function creerInstance(nom, desc) {
+    const e = lire(); const u = utilisateurCourant(); if (!u) return { ok: false, erreur: "Non connecté." };
+    // Sécurité : bornage côté données (le maxlength HTML protège la saisie,
+    // cette vérification protège l'application elle-même).
+    nom = (nom || "").trim().slice(0, LIMITES.nomInstance);
+    desc = (desc || "").trim().slice(0, LIMITES.descInstance);
+    if (!nom) return { ok: false, erreur: "Nom d'instance obligatoire." };
+    try {
+      const inst = { id: uid("i"), nom, desc, proprio: u.id, membres: [] };
+      e.instances.push(inst);
+      e.donnees[inst.id] = Noyau.instanceNeuve();
+      sauver(); return { ok: true };
+    } catch (err) {
+      return { ok: false, erreur: "Échec de la création : " + err.message };
+    }
+  }
+  function dupliquerInstance(id, nouveauNom, nouvelleDesc) {
+    const e = lire(); const u = utilisateurCourant(); if (!u) return { ok: false, erreur: "Non connecté." };
+    const src = e.instances.find(i => i.id === id); if (!src) return { ok: false, erreur: "Instance introuvable." };
+    // Bornage identique à la création.
+    nouveauNom = (nouveauNom || "").trim().slice(0, LIMITES.nomInstance);
+    nouvelleDesc = (nouvelleDesc || "").trim().slice(0, LIMITES.descInstance);
+    if (!nouveauNom) return { ok: false, erreur: "Nom obligatoire." };
+    try {
+      const inst = { ...src, id: uid("i"), nom: nouveauNom, desc: nouvelleDesc, proprio: u.id, membres: [] };
+      // Copie PROFONDE des données : la copie vit ensuite sa vie indépendamment.
+      e.instances.push(inst);
+      e.donnees[inst.id] = JSON.parse(JSON.stringify(e.donnees[id]));
+      sauver(); return { ok: true };
+    } catch (err) {
+      return { ok: false, erreur: "Échec de la duplication : " + err.message };
+    }
+  }
+  function modifierInstance(id, nom, desc) {
+    const e = lire(); const i = e.instances.find(x => x.id === id); if (!i) return { ok: false, erreur: "Introuvable." };
+    // Bornage identique à la création (le maxlength HTML protège la saisie,
+    // cette vérification protège l'application elle-même).
+    i.nom = nom.trim().slice(0, LIMITES.nomInstance);
+    i.desc = (desc || "").trim().slice(0, LIMITES.descInstance);
+    sauver(); return { ok: true };
+  }
+  function supprimerInstance(id) {
+    const e = lire();
+    e.instances = e.instances.filter(i => i.id !== id);
+    delete e.donnees[id]; sauver();
+  }
+  function donneesInstance(id) { return lire().donnees[id]; }
+  /* Remise à zéro interne (uniquement pour la suite de tests : simule un
+     rechargement de page en vidant le cache mémoire de la base). */
+  function _raz() { etat = null; }
+
+  /* Droits (V1 : affectation d'utilisateurs à une instance ; les rôles
+     détaillés seront définis dans une version ultérieure). */
+  function affecterMembre(idInstance, idUtilisateur) {
+    const e = lire(); const inst = e.instances.find(i => i.id === idInstance);
+    if (!inst) return { ok: false, erreur: "Instance introuvable." };
+    if (!inst.membres.includes(idUtilisateur)) inst.membres.push(idUtilisateur);
+    sauver(); return { ok: true };
+  }
+  function retirerMembre(idInstance, idUtilisateur) {
+    const e = lire(); const inst = e.instances.find(i => i.id === idInstance);
+    if (!inst) return { ok: false, erreur: "Instance introuvable." };
+    inst.membres = inst.membres.filter(m => m !== idUtilisateur);
+    sauver(); return { ok: true };
+  }
+
+  return { charger, lire, sauver, inscrire, connecter, deconnecter, utilisateurCourant, _raz,
+           mesInstances, creerInstance, dupliquerInstance, modifierInstance, supprimerInstance,
+           donneesInstance, affecterMembre, retirerMembre };
+})();
+
+/* ============ 3. VUES : affichage ============ */
+
+// Fabrique un élément HTML depuis une chaîne, et échappe le texte dynamique.
+function h(html) { const d = document.createElement("div"); d.innerHTML = html.trim(); return d.firstChild; }
+/* OPTIMISATION : la table des entités est créée UNE seule fois (et non à
+   chaque remplacement) — esc() est appelée des milliers de fois lors du
+   rendu des grandes tables. */
+const ENTITIES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+function esc(s) { return String(s ?? '').replace(/[<>"&]/g, c => ENTITIES[c]); }
+
+/* État d'interface courant (quelle instance, quel onglet, quelles colonnes). */
+const App = { instanceOuverte: null, vue: "lignes", vueObjet: "reseaux", colonnes: null,
+              tris: [], filtres: {}, actionsDebut: false, vueCat: "Activités",
+              barre: { q: "", reseau: "all", activite: "all", mode: "all", groupe: "all" } };
+
+/* ---------- Sécurité & diagnostic ----------
+   Toute erreur JavaScript non capturée s'affiche dans un bandeau rouge en
+   haut de l'écran. Indispensable pour diagnostiquer à distance (ex. sur
+   GitHub Pages ou un téléphone, sans console de développeur). */
+function afficherErreur(msg) {
+  let b = document.getElementById("bloc-erreur");
+  if (!b) {
+    b = document.createElement("div");
+    b.id = "bloc-erreur";
+    b.style.cssText = "background:#dc2626;color:#fff;padding:8px 16px;font-size:13px;position:sticky;top:0;z-index:999;";
+    document.body.prepend(b);
+  }
+  b.textContent = "⚠️ Erreur : " + msg;
+}
+window.addEventListener("error", (ev) => afficherErreur(ev.message));
+
+/* Limites de sécurité (demandées + appliquées aussi côté données,
+   car un `maxlength` HTML seul peut être contourné). */
+const LIMITES = { nomInstance: 32, descInstance: 256 };
+
+function rafraichir() {
+  const app = document.getElementById("app");
+  const u = BD.utilisateurCourant();
+  if (!u) { app.replaceChildren(vueIdentification()); return; }
+  if (!App.instanceOuverte) { app.replaceChildren(vueAccueil(u)); return; }
+  app.replaceChildren(vueEspaceTravail(u));
+}
+
+/* ---------- Écran identification ---------- */
+function vueIdentification() {
+  const racine = h(`<div>
+    <div class="topbar">
+      <span class="brand"><span class="brand-mark">🚌</span><span>HASTUS libre</span></span>
+      <span class="info-txt">Version 1 — Définition du réseau</span>
+    </div>
+    <div class="conteneur" style="max-width:440px;margin-top:40px;">
+      <div class="carte" style="display:block;">
+        <h1>Identification</h1>
+        <p class="info-txt">Comptes stockés uniquement dans ce navigateur (version 1). La gestion en ligne viendra plus tard.</p>
+        <div class="champ"><label>Nom d'utilisateur</label><input id="f-nom" /></div>
+        <div class="champ"><label>Mot de passe</label><input id="f-mdp" type="password" /></div>
+        <div class="erreur" id="f-err"></div>
+        <div class="ligne-boutons">
+          <button id="f-co">Se connecter</button>
+          <button id="f-ins" class="b-bleu">Créer un compte</button>
+        </div>
+      </div>
+    </div>
+  </div>`);
+  const tenter = (fn) => {
+    const r = fn(racine.querySelector("#f-nom").value, racine.querySelector("#f-mdp").value);
+    if (!r.ok) { racine.querySelector("#f-err").textContent = r.erreur; return; }
+    rafraichir();
+  };
+  racine.querySelector("#f-co").onclick = () => tenter(BD.connecter);
+  racine.querySelector("#f-ins").onclick = () => tenter(BD.inscrire);
+  return racine;
+}
+
+/* ---------- Bouton supprimer sensible (double clic en 3 s) ---------- */
+function boutonSupprimer(texte, onConfirme) {
+  const b = h(`<button class="suppr"><div class="barre"></div><span style="position:relative;">${texte}</span></button>`);
+  let arme = false;
+  b.onclick = () => {
+    if (!arme) {
+      // Premier clic : on arme, la barre se vide en 3 s puis on désarme seul.
+      arme = true; b.classList.add("armed"); b.querySelector("span").textContent = "Confirmer ?";
+      setTimeout(() => { arme = false; b.classList.remove("armed"); b.querySelector("span").textContent = texte; }, 3000);
+    } else { onConfirme(); }
+  };
+  return b;
+}
+
+/* Fenêtre modale générique. « large » = occupe presque tout l'écran
+   (utilisée par l'import : le tableau doit tenir en largeur). */
+function modal(contenu, large) {
+  const fond = h(`<div class="modal-fond"><div class="modal"></div></div>`);
+  if (large) { fond.firstChild.style.maxWidth = "95vw"; fond.firstChild.style.width = "95%"; }
+  fond.firstChild.appendChild(contenu);
+  fond.onclick = (e) => { if (e.target === fond) fond.remove(); };
+  document.body.appendChild(fond);
+  return fond;
+}
+
+/* Fenêtre « où est-il utilisé ? » (demande de Jules) : liste les éléments
+   qui utilisent un objet, UN PAR UN, chacun modifiable ou supprimable
+   directement depuis la liste. */
+function modalUsages(titre, obtenirUsages) {
+  const form = h(`<div>
+    <h2>🔎 Utilisations — ${esc(titre)}</h2>
+    <div id="u-liste"></div>
+    <div class="ligne-boutons"><button id="m-fermer" class="b-bleu">Fermer</button></div>
+  </div>`);
+  const box = form.querySelector("#u-liste");
+  const dessiner = () => {
+    box.innerHTML = "";
+    const usages = obtenirUsages();
+    if (!usages.length) { box.appendChild(h(`<p class="info-txt">Aucune utilisation.</p>`)); return; }
+    usages.forEach(u => {
+      const carte = h(`<div class="carte" style="margin:6px 0;padding:8px 14px;">
+        <span>${u.label()}</span><span class="inline-flex"></span></div>`);
+      const act = carte.lastElementChild;
+      const bM = h(`<button>Modifier</button>`);
+      bM.onclick = () => { form.closest(".modal-fond").remove(); u.modifier(); };
+      act.appendChild(bM);
+      act.appendChild(boutonSupprimer("Supprimer", () => { u.supprimer(); BD.sauver(); dessiner(); }));
+      box.appendChild(carte);
+    });
+  };
+  form.querySelector("#m-fermer").onclick = () => form.closest(".modal-fond").remove();
+  dessiner();
+  modal(form);
+}
+
+/* ---------- Écran accueil : liste des instances ---------- */
+function vueAccueil(u) {
+  const insts = BD.mesInstances();
+  const racine = h(`<div>
+    <div class="topbar">
+      <span class="brand"><span class="brand-mark">🚌</span><span>HASTUS libre</span></span>
+      <span class="inline-flex"><span class="info-txt">${esc(u.nom)}${u.admin ? " (admin)" : ""}</span>
+      <button id="deco">Se déconnecter</button></span>
+    </div>
+    <div class="conteneur">
+      <div class="inline-flex" style="justify-content:space-between;width:100%;">
+        <h1>Mes instances de travail</h1>
+        <span class="inline-flex">
+          <button id="tests">🧪 Tests</button>
+          <button id="nouvelle" class="b-bleu">+ Nouvelle instance</button>
+        </span>
+      </div>
+      <div id="liste" class="grille-instances"></div>
+    </div>
+  </div>`);
+  racine.querySelector("#deco").onclick = () => { BD.deconnecter(); App.instanceOuverte = null; rafraichir(); };
+  racine.querySelector("#tests").onclick = lancerTests;
+  racine.querySelector("#nouvelle").onclick = () => {
+    // Modale de création : maxlength HTML + compteur de caractères en direct,
+    // + validation double côté données. try/catch pour afficher l'erreur précise
+    // si quelque chose échoue (au lieu d'un silence incompréhensible).
+    const form = h(`<div>
+      <h2>Créer une nouvelle instance</h2>
+      <div class="champ"><label>Nom de l'instance (32 caractères max.)</label>
+        <input id="m-nom" maxlength="32"/><div class="info-txt" id="cpt-nom">0 / 32</div></div>
+      <div class="champ"><label>Description courte (256 caractères max.)</label>
+        <textarea id="m-desc" rows="2" maxlength="256"></textarea><div class="info-txt" id="cpt-desc">0 / 256</div></div>
+      <div class="erreur" id="m-err"></div>
+      <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-bleu">Créer</button></div>
+    </div>`);
+    modal(form);
+    // Compteurs de caractères en direct.
+    const majCompteur = () => {
+      form.querySelector("#cpt-nom").textContent = `${form.querySelector("#m-nom").value.length} / 32`;
+      form.querySelector("#cpt-desc").textContent = `${form.querySelector("#m-desc").value.length} / 256`;
+    };
+    form.querySelector("#m-nom").addEventListener("input", majCompteur);
+    form.querySelector("#m-desc").addEventListener("input", majCompteur);
+    form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
+    form.querySelector("#m-ok").onclick = () => {
+      try {
+        const r = BD.creerInstance(form.querySelector("#m-nom").value, form.querySelector("#m-desc").value);
+        if (!r.ok) { form.querySelector("#m-err").textContent = r.erreur; return; }
+        form.closest(".modal-fond").remove(); rafraichir();
+      } catch (err) {
+        form.querySelector("#m-err").textContent = "Erreur inattendue : " + err.message;
+        afficherErreur(err.message + " (création d'instance)");
+      }
+    };
+  };
+
+  const liste = racine.querySelector("#liste");
+  if (!insts.length) {
+    liste.appendChild(h(`<p class="info-txt" style="text-align:center;padding:40px;">Aucune instance. Créez-en une pour commencer !</p>`));
+  }
+  insts.forEach(inst => {
+    const d = BD.donneesInstance(inst.id);
+    // Carte instance (reprise du prototype V2) : titre, description,
+    // badges réseaux/contrats/lignes, actions alignées à droite.
+    const carte = h(`<div class="carte instance-carte">
+      <h3>${esc(inst.nom)}</h3>
+      <div class="desc">${esc(inst.desc)}</div>
+      <div class="meta">
+        <span class="etiquette">${d.reseaux.length} réseaux</span>
+        <span class="etiquette">${d.contrats.length} contrats</span>
+        <span class="etiquette">${d.lignes.length} lignes</span>
+      </div>
+      <div class="actions"></div>
+    </div>`);
+    // lastElementChild = dernier ÉLÉMENT uniquement (lastChild peut renvoyer un
+    // nœud texte invisible — espace avant </div> — qui ne peut pas
+    // recevoir de bouton : c'était le bug du bandeau rouge).
+    const act = carte.lastElementChild;
+    const bOuvrir = h(`<button class="b-bleu">Ouvrir</button>`);
+    bOuvrir.onclick = () => { App.instanceOuverte = inst; App.vue = "lignes"; App.colonnes = null; rafraichir(); };
+    const bDupl = h(`<button class="b-vert">Dupliquer</button>`);
+    // Dupliquer : mêmes limites de sécurité que la création.
+    bDupl.onclick = () => {
+      const form = h(`<div>
+        <h2>Dupliquer « ${esc(inst.nom)} »</h2>
+        <p class="info-txt">La copie reprendra toutes les données. Ajustez le nom et la description.</p>
+        <div class="champ"><label>Nom</label><input id="m-nom" maxlength="32" value="${esc(inst.nom.slice(0, LIMITES.nomInstance - 8))} (copie)" /></div>
+        <div class="champ"><label>Description</label><textarea id="m-desc" rows="2" maxlength="256">${esc(inst.desc)}</textarea></div>
+        <div class="erreur" id="m-err"></div>
+        <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-vert">Dupliquer</button></div>
+      </div>`);
+      modal(form);
+      form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
+      form.querySelector("#m-ok").onclick = () => {
+        const r = BD.dupliquerInstance(inst.id, form.querySelector("#m-nom").value, form.querySelector("#m-desc").value);
+        if (!r.ok) { alert(r.erreur); return; }
+        form.closest(".modal-fond").remove(); rafraichir();
       };
-
-      loginBtn.addEventListener('click', () => handleSubmit('login'));
-      registerBtn.addEventListener('click', () => handleSubmit('register'));
-      [username, password].forEach(input => {
-        input.addEventListener('keydown', (event) => {
-          if (event.key === 'Enter') handleSubmit('login');
-        });
-      });
-    }
-
-    function renderDashboard(user) {
-      const instances = getVisibleInstances();
-      const cards = instances.map(inst => {
-        const data = getInstanceData(inst.id);
-        return `
-          <article class="card instance-card">
-            <h3>${escapeHtml(inst.name)}</h3>
-            <p>${escapeHtml(inst.description || 'Aucune description.')}</p>
-            <div class="instance-meta">
-              <span class="badge">${data.networks.length} réseaux</span>
-              <span class="badge">${data.contracts.length} contrats</span>
-              <span class="badge">${data.lines.length} lignes</span>
-            </div>
-            <div class="instance-actions">
-              <button class="primary open-instance" data-id="${inst.id}">Ouvrir</button>
-              <button class="success duplicate-instance" data-id="${inst.id}">Dupliquer</button>
-              <button class="edit-instance" data-id="${inst.id}">Modifier</button>
-              <button class="danger delete-instance" data-id="${inst.id}">Supprimer</button>
-            </div>
-          </article>
-        `;
-      }).join('');
-
-      return `
-        <div class="app-shell">
-          <header class="topbar">
-            <div class="brand">
-              <span class="brand-mark">🚌</span>
-              <span>HASTUS libre</span>
-            </div>
-            <div class="topbar-actions">
-              <span class="muted">${escapeHtml(user.name)}</span>
-              <button id="disconnectBtn">Se déconnecter</button>
-            </div>
-          </header>
-          <main class="container">
-            <div class="screen-header">
-              <div class="page-title">
-                <h1>Mes instances</h1>
-              </div>
-              <div class="topbar-actions">
-                <button id="testsBtn">🧪 Tests</button>
-                <button id="newInstanceBtn" class="primary">+ Nouvelle instance</button>
-              </div>
-            </div>
-            <div class="instance-list">
-              ${cards || '<div class="empty-state card" style="grid-column: 1 / -1;">Aucune instance. Créez-en une pour commencer.</div>'}
-            </div>
-          </main>
-        </div>
-      `;
-    }
-
-    function bindDashboard() {
-      document.getElementById('disconnectBtn').addEventListener('click', () => {
-        const store = getStore();
-        store.session = null;
-        saveStore(store);
-        state.instance = null;
-        render();
-      });
-
-      document.getElementById('newInstanceBtn').addEventListener('click', () => openInstanceModal('create'));
-      document.getElementById('testsBtn').addEventListener('click', () => {
-        alert(runCoreTests());
-      });
-
-      document.querySelectorAll('.open-instance').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const id = btn.dataset.id;
-          const store = getStore();
-          const inst = store.instances.find(i => i.id === id);
-          if (!inst) return;
-          state.instance = inst;
-          state.view = store.lastView || 'lines';
-          render();
-        });
-      });
-
-      document.querySelectorAll('.duplicate-instance').forEach(btn => {
-        btn.addEventListener('click', () => duplicateInstanceModal(btn.dataset.id));
-      });
-
-      document.querySelectorAll('.edit-instance').forEach(btn => {
-        btn.addEventListener('click', () => editInstanceModal(btn.dataset.id));
-      });
-
-      document.querySelectorAll('.delete-instance').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const id = btn.dataset.id;
-          if (!confirm('Supprimer cette instance ?')) return;
-          const store = getStore();
-          store.instances = store.instances.filter(inst => inst.id !== id);
-          delete store.data[id];
-          saveStore(store);
-          render();
-        });
-      });
-    }
-
-    function renderWorkspace(user) {
-      const store = getStore();
-      const inst = state.instance || store.instances[0];
-      const data = getInstanceData(inst.id);
-      const alertCount = countCatalogueAlerts(data);
-
-      return `
-        <div class="app-shell">
-          <header class="topbar">
-            <div class="topbar-actions">
-              <button id="backBtn" class="ghost">← Retour</button>
-              <div class="brand">
-                <span class="brand-mark">🚌</span>
-                <span>HASTUS libre</span>
-              </div>
-            </div>
-            <div class="topbar-actions">
-              <span class="badge">${escapeHtml(inst.name)}</span>
-              <span class="muted">${escapeHtml(user.name)}</span>
-            </div>
-          </header>
-
-          <main class="container">
-            <div class="workspace-tabs">
-              <button class="tab ${state.view === 'lines' ? 'active' : ''}" data-tab="lines">🚏 Lignes</button>
-              <button class="tab ${state.view === 'networks' ? 'active' : ''}" data-tab="networks">🧭 Réseaux & contrats</button>
-              <button class="tab ${state.view === 'catalogue' ? 'active' : ''}" data-tab="catalogue">🏷️ Catalogue ${alertCount ? `<span class="badge alert">⚠ ${alertCount}</span>` : ''}</button>
-            </div>
-            ${state.view === 'lines' ? renderLinesView(data, inst) : ''}
-            ${state.view === 'networks' ? renderNetworksView(data, inst) : ''}
-            ${state.view === 'catalogue' ? renderCatalogueView(data, inst) : ''}
-          </main>
-        </div>
-      `;
-    }
-
-    function bindWorkspace() {
-      document.getElementById('backBtn').addEventListener('click', () => {
-        state.instance = null;
-        render();
-      });
-
-      document.querySelectorAll('.tab').forEach(btn => {
-        btn.addEventListener('click', () => {
-          state.view = btn.dataset.tab;
-          const store = getStore();
-          store.lastView = state.view;
-          saveStore(store);
-          render();
-        });
-      });
-
-      if (state.view === 'lines') bindLinesView();
-      if (state.view === 'networks') bindNetworksView();
-      if (state.view === 'catalogue') bindCatalogueView();
-    }
-
-    function renderLinesView(data, inst) {
-      const summary = {
-        lines: data.lines.length,
-        networks: data.networks.length,
-        contracts: data.contracts.length,
-        tags: Object.values(data.catalogue).reduce((sum, cat) => sum + cat.labels.length, 0)
+    };
+    const bMod = h(`<button>Modifier</button>`);
+    bMod.onclick = () => {
+      // Modifier : mêmes garde-fous que la création (limites + compteurs).
+      const form = h(`<div>
+        <h2>Modifier l'instance</h2>
+        <div class="champ"><label>Nom (32 caractères max.)</label>
+          <input id="m-nom" maxlength="32" value="${esc(inst.nom)}"/><div class="info-txt" id="cpt-nom"></div></div>
+        <div class="champ"><label>Description (256 caractères max.)</label>
+          <textarea id="m-desc" rows="2" maxlength="256">${esc(inst.desc)}</textarea><div class="info-txt" id="cpt-desc"></div></div>
+        <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-bleu">Enregistrer</button></div>
+      </div>`);
+      modal(form);
+      const majCompteur = () => {
+        form.querySelector("#cpt-nom").textContent = `${form.querySelector("#m-nom").value.length} / 32`;
+        form.querySelector("#cpt-desc").textContent = `${form.querySelector("#m-desc").value.length} / 256`;
       };
-
-      const filteredLines = getFilteredLines(data);
-
-      return `
-        <section class="summary-grid">
-          <div class="card stat">
-            <span class="label">Lignes</span>
-            <div class="value">${summary.lines}<small>total</small></div>
-          </div>
-          <div class="card stat">
-            <span class="label">Réseaux</span>
-            <div class="value">${summary.networks}<small>actifs</small></div>
-          </div>
-          <div class="card stat">
-            <span class="label">Contrats</span>
-            <div class="value">${summary.contracts}<small>en cours</small></div>
-          </div>
-          <div class="card stat">
-            <span class="label">Références</span>
-            <div class="value">${summary.tags}<small>labels</small></div>
-          </div>
-        </section>
-
-        <div class="card transport-panel">
-          <div class="toolbar">
-            <div class="toolbar-title">Tableau de gestion des lignes</div>
-            <div class="toolbar-actions">
-              <button id="copyRowsBtn">📋 Copier Excel</button>
-              <button id="importRowsBtn">📥 Importer</button>
-              <button id="addLineBtn" class="primary">+ Nouvelle ligne</button>
-            </div>
-          </div>
-
-          <div class="filter-grid">
-            <div class="field">
-              <label>Recherche</label>
-              <input id="lineSearch" value="${escapeHtml(state.tableFilters.query)}" placeholder="Abréviation, nom, réseau…" />
-            </div>
-            <div class="field">
-              <label>Réseau</label>
-              <select id="lineFilterNetwork">
-                <option value="all">Tous</option>
-                ${data.networks.map(net => `<option value="${net.id}" ${state.tableFilters.network === net.id ? 'selected' : ''}>${escapeHtml(net.name)}</option>`).join('')}
-              </select>
-            </div>
-            <div class="field">
-              <label>Activité</label>
-              <select id="lineFilterActivity">
-                <option value="all">Toutes</option>
-                ${getCatalogueOptions(data, 'Activités').map(opt => `<option value="${escapeHtml(opt.nom)}" ${state.tableFilters.activity === opt.nom ? 'selected' : ''}>${escapeHtml(opt.nom)}</option>`).join('')}
-              </select>
-            </div>
-            <div class="field">
-              <label>Mode</label>
-              <select id="lineFilterMode">
-                <option value="all">Tous</option>
-                ${getCatalogueOptions(data, 'Modes de transport').map(opt => `<option value="${escapeHtml(opt.nom)}" ${state.tableFilters.mode === opt.nom ? 'selected' : ''}>${escapeHtml(opt.nom)}</option>`).join('')}
-              </select>
-            </div>
-          </div>
-
-          <div class="toolbar" style="margin-bottom:10px;">
-            <div class="muted">${filteredLines.length} ligne(s) affichée(s)</div>
-            <div class="toolbar-actions">
-              <button class="small" id="resetFiltersBtn">Réinitialiser</button>
-              <button class="small" id="toggleSortBtn">Tri: ${state.tableFilters.sortDir === 'asc' ? 'A → Z' : 'Z → A'}</button>
-            </div>
-          </div>
-
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th><button class="ghost small sort-col" data-sort="abrev">Abrév.</button></th>
-                  <th><button class="ghost small sort-col" data-sort="nom">Nom</button></th>
-                  <th>Réseau</th>
-                  <th>Contrat</th>
-                  <th>Activité</th>
-                  <th>Mode</th>
-                  <th>Groupe</th>
-                  <th>Statut</th>
-                  <th style="text-align:right;">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${renderLinesTableRows(filteredLines, data)}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      `;
+      form.querySelector("#m-nom").addEventListener("input", majCompteur);
+      form.querySelector("#m-desc").addEventListener("input", majCompteur);
+      majCompteur();
+      form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
+      form.querySelector("#m-ok").onclick = () => {
+        const r = BD.modifierInstance(inst.id, form.querySelector("#m-nom").value, form.querySelector("#m-desc").value);
+        if (!r.ok) { alert(r.erreur); return; }
+        form.closest(".modal-fond").remove(); rafraichir();
+      };
+    };
+    act.appendChild(bOuvrir); act.appendChild(bDupl); act.appendChild(bMod);
+    act.appendChild(boutonSupprimer("Supprimer", () => { BD.supprimerInstance(inst.id); rafraichir(); }));
+    // Gestion des droits : réservée à l'admin ou au propriétaire de l'instance.
+    if (u.admin || inst.proprio === u.id) {
+      const bDroits = h(`<button>👥 Droits</button>`);
+      bDroits.onclick = () => modalDroits(inst);
+      act.appendChild(bDroits);
     }
+    liste.appendChild(carte);
+  });
+  return racine;
+}
 
-    function bindLinesView() {
-      document.getElementById('addLineBtn').addEventListener('click', () => openLineModal());
+/* Fenêtre de gestion des droits (V1 : affectation simple de membres). */
+function modalDroits(inst) {
+  const e = BD.lire();
+  const form = h(`<div>
+    <h2>Droits — ${esc(inst.nom)}</h2>
+    <p class="info-txt">Affectez des utilisateurs à cette instance. Les rôles détaillés viendront dans une version ultérieure.</p>
+    <div id="membres"></div>
+    <div class="champ" style="margin-top:12px;"><label>Ajouter un utilisateur</label>
+      <select id="m-choix"><option value="">— Choisir —</option></select></div>
+    <div class="ligne-boutons"><button id="m-fermer">Fermer</button></div>
+  </div>`);
+  const membresBox = form.querySelector("#membres");
+  const dessinerMembres = () => {
+    membresBox.innerHTML = "";
+    e.utilisateurs.filter(x => inst.membres.includes(x.id) || x.id === inst.proprio).forEach(m => {
+      const role = m.id === inst.proprio ? "propriétaire" : "membre";
+      const l = h(`<div class="carte" style="margin:6px 0;"><span>${esc(m.nom)} <span class="etiquette">${role}</span></span></div>`);
+      if (m.id !== inst.proprio) {
+        const b = h(`<button>Retirer</button>`);
+        b.onclick = () => { BD.retirerMembre(inst.id, m.id); dessinerMembres(); };
+        l.appendChild(b);
+      }
+      membresBox.appendChild(l);
+    });
+    const choix = form.querySelector("#m-choix");
+    choix.innerHTML = '<option value="">— Choisir —</option>' +
+      e.utilisateurs.filter(x => !inst.membres.includes(x.id) && x.id !== inst.proprio)
+        .map(x => `<option value="${x.id}">${esc(x.nom)}</option>`).join("");
+  };
+  form.querySelector("#m-choix").onchange = (ev) => {
+    if (ev.target.value) { BD.affecterMembre(inst.id, ev.target.value); dessinerMembres(); }
+  };
+  form.querySelector("#m-fermer").onclick = () => form.closest(".modal-fond").remove();
+  dessinerMembres();
+  modal(form);
+}
 
-      document.getElementById('copyRowsBtn').addEventListener('click', () => {
-        const data = getInstanceData(state.instance.id);
-        const rows = [
-          ['id', 'abrev', 'nom', 'reseau', 'contrat', 'activite', 'mode', 'groupe'],
-          ...data.lines.map(line => [
-            line.id,
-            line.abrev,
-            line.nom,
-            line.reseauId ? findNetworkName(data, line.reseauId) : '',
-            line.contratId ? findContractName(data, line.contratId) : '',
-            line.activite || '',
-            line.mode || '',
-            line.groupe || ''
-          ])
+/* ---------- Espace de travail (instance ouverte) ---------- */
+function vueEspaceTravail(u) {
+  const dOng = BD.donneesInstance(App.instanceOuverte.id);
+  // Badge ⚠ sur l'onglet catalogue : valeurs à paramétrer (créées par un
+  // import en masse ou saisies sans code d'export).
+  const nbAP = Object.values(dOng.catalogue).reduce((n, cat) =>
+    n + cat.labels.filter(l => l.origine === "local" && !(l.codes.export || "").trim()).length, 0);
+  const nbRefs = Object.values(dOng.catalogue).reduce((n, cat) => n + cat.labels.length, 0);
+  // Capsules statistiques (reprise du prototype V2) : page d'accueil de
+  // l'instance — comptes clés toujours visibles au-dessus des onglets.
+  const resume = h(`<div class="resume">
+    <div class="stat"><span class="libelle">Lignes</span><div class="valeur">${dOng.lignes.length}<small>total</small></div></div>
+    <div class="stat"><span class="libelle">Réseaux</span><div class="valeur">${dOng.reseaux.length}<small>actifs</small></div></div>
+    <div class="stat"><span class="libelle">Contrats</span><div class="valeur">${dOng.contrats.length}<small>en cours</small></div></div>
+    <div class="stat"><span class="libelle">Références</span><div class="valeur">${nbRefs}<small>labels</small></div></div>
+  </div>`);
+  const racine = h(`<div>
+    <div class="topbar">
+      <span class="inline-flex">
+        <button id="retour" class="petit">← Retour</button>
+        <span class="brand"><span class="brand-mark">🚌</span><span>HASTUS libre</span></span>
+      </span>
+      <span class="inline-flex">
+        <span class="etiquette">${esc(App.instanceOuverte.nom)}</span>
+        <span class="info-txt">${esc(u.nom)}</span>
+      </span>
+    </div>
+    <div class="conteneur" id="haut-travail"></div>
+    <div class="conteneur" id="contenu" ${App.vue === "lignes" ? 'style="max-width:none;"' : ""}></div>
+  </div>`);
+  racine.querySelector("#retour").onclick = () => { App.instanceOuverte = null; App.colonnes = null; rafraichir(); };
+  const haut = racine.querySelector("#haut-travail");
+  haut.appendChild(resume);
+  const onglets = h(`<div class="onglets" id="onglets"></div>`);
+  [["lignes", "🚏 Toutes les lignes"], ["vue", "🚌 Réseaux & contrats"],
+   ["catalogue", "🏷️ Catalogue de l'instance" + (nbAP ? ` <span class="etiquette alerte">⚠ ${nbAP}</span>` : "")]].forEach(([cle, label]) => {
+    const b = h(`<button class="onglet ${App.vue === cle ? "actif" : ""}">${label}</button>`);
+    b.onclick = () => { App.vue = cle; rafraichir(); };
+    onglets.appendChild(b);
+  });
+  haut.appendChild(onglets);
+  const contenu = racine.querySelector("#contenu");
+  if (App.vue === "lignes") contenu.appendChild(vueLignes());
+  if (App.vue === "vue") contenu.appendChild(vueReseauxContrats());
+  if (App.vue === "catalogue") contenu.appendChild(vueCatalogue());
+  return racine;
+}
+
+/* ---------- Vue : toutes les lignes (tableau paramétrable) ---------- */
+/* Les colonnes calculées ("auto") ne stockent rien : leur valeur est
+   dérivée à la volée. Les préférences de colonnes sont mémorisées par instance. */
+/* Colonnes de base du tableau des lignes.
+   - "id" est FIXE : toujours affichée, non décochable (identifiant unique
+     calculé par l'instance, servira de clé aux exports GTFS/NeTEx).
+   - Les colonnes calculées définies par l'utilisateur (onglet dédié du
+     catalogue) s'ajoutent dynamiquement : voir colonnesDisponibles(). */
+const COLONNES = [
+  { cle: "id", label: "ID unique", fixe: true },
+  { cle: "abrev", label: "Abrév." },
+  { cle: "nom", label: "Nom commercial" },
+  { cle: "reseau", label: "Réseau", join: "reseauId", src: "reseaux" },
+  { cle: "contrat", label: "Contrat", join: "contratId", src: "contrats" },
+  { cle: "activite", label: "Activité" },
+  { cle: "mode", label: "Mode" },
+  { cle: "groupe", label: "Groupe" },
+  { cle: "nbVehicules", label: "Nb véhicules", calc: l => l.vehicules.length },
+  { cle: "nbEnergies", label: "Nb énergies", calc: l => l.energies.length },
+  { cle: "nbFonctions", label: "Nb fonctions", calc: l => l.fonctions.length },
+];
+/* Toutes les colonnes disponibles = base + colonnes calculées utilisateur
+   (un compteur : nombre d'éléments d'une liste rattachée à la ligne). */
+function colonnesDisponibles() {
+  const d = BD.donneesInstance(App.instanceOuverte.id);
+  const calcU = (d.colonnesCalculees || []).map(c => ({
+    cle: "u:" + c.nom, label: c.nom, calc: l => Noyau.valeurColCalculee(l, c), utilisateur: true
+  }));
+  return [...COLONNES, ...calcU];
+}
+function colonnesAffichees() {
+  const pref = localStorage.getItem("hastus_colonnes_" + App.instanceOuverte.id);
+  return pref ? JSON.parse(pref) : ["abrev", "nom", "reseau", "contrat", "activite", "mode", "groupe", "nbVehicules"];
+}
+/* Valeur affichée d'une cellule. OPTIMISATION : « cache » (optionnel) =
+   Maps id→nom précalculées pour les jointures — évite un find() complet
+   par cellule affichée. */
+function valColonne(d, col, l, cache) {
+  if (col.calc) return col.calc(l);
+  if (col.join) {
+    if (cache && cache[col.src]) {
+      const nom = cache[col.src].get(l[col.join]);
+      return nom !== undefined && nom !== null ? nom : "—";
+    }
+    const o = d[col.src].find(x => x.id === l[col.join]); return o ? o.nom : "—";
+  }
+  return l[col.cle] || "";
+}
+
+function vueLignes() {
+  const d = BD.donneesInstance(App.instanceOuverte.id);
+  if (!App.colonnes) App.colonnes = colonnesAffichees();
+  const dispo = colonnesDisponibles();
+  // Ordre d'affichage = ordre choisi par l'utilisateur (menu ⚙ Colonnes),
+  // ID unique fixe en tête, et colonne Actions positionnable début/fin.
+  const act = { cle: "__actions", label: "Actions" };
+  const cles = App.actionsDebut
+    ? ["__actions", "id", ...App.colonnes]
+    : ["id", ...App.colonnes, "__actions"];
+  const cols = cles.map(cle => cle === "__actions" ? act : dispo.find(c => c.cle === cle)).filter(Boolean);
+  const lignesAffichees = trierEtFiltrer(d, dispo);
+
+  const racine = h(`<div style="width:90%;margin:0 auto;">
+    <div class="carte panneau-travail">
+    <div class="barre-outils">
+      <div class="titre">Tableau de gestion des lignes</div>
+      <div class="actions">
+        <span class="menu-col"><button id="b-col">⚙ Colonnes</button></span>
+        <button id="b-copy">📋 Copier (Excel)</button>
+        <button id="b-masse">📥 Importer</button>
+        <button id="b-nouv" class="b-bleu">+ Créer une ligne</button>
+      </div>
+    </div>
+    <!-- Barre de filtres rapide (reprise du prototype V2, adaptée) :
+         recherche plein texte + listes Réseau / Activité / Mode / Groupe.
+         Se COMBINE avec les tris et filtres 🔎 de chaque colonne (en ET). -->
+    <div class="barre-filtres">
+      <div class="champ"><label>Recherche</label>
+        <input id="fl-q" value="${esc(App.barre.q)}" placeholder="Abréviation, nom, réseau…"/></div>
+      <div class="champ"><label>Réseau</label>
+        <select id="fl-reseau"><option value="all">Tous</option>
+          ${d.reseaux.map(r => `<option value="${r.id}" ${App.barre.reseau === r.id ? "selected" : ""}>${esc(r.nom)}</option>`).join("")}</select></div>
+      <div class="champ"><label>Activité</label>
+        <select id="fl-activite"><option value="all">Toutes</option>
+          ${d.catalogue["Activités"].labels.map(a => `<option value="${esc(a.nom)}" ${App.barre.activite === a.nom ? "selected" : ""}>${esc(a.nom)}</option>`).join("")}</select></div>
+      <div class="champ"><label>Mode</label>
+        <select id="fl-mode"><option value="all">Tous</option>
+          ${d.catalogue["Modes de transport"].labels.map(m => `<option value="${esc(m.nom)}" ${App.barre.mode === m.nom ? "selected" : ""}>${esc(m.nom)}</option>`).join("")}</select></div>
+      <div class="champ"><label>Groupe</label>
+        <select id="fl-groupe"><option value="all">Tous</option>
+          ${d.catalogue["Groupes de lignes"].labels.map(g => `<option value="${esc(g.nom)}" ${App.barre.groupe === g.nom ? "selected" : ""}>${esc(g.nom)}</option>`).join("")}</select></div>
+    </div>
+    <div class="inline-flex" style="justify-content:space-between;width:100%;margin-bottom:10px;">
+      <span class="info-txt">Toutes les lignes de cette instance — double-clic pour modifier.</span>
+      <span class="inline-flex">
+        <button id="fl-raz" class="petit">Réinitialiser les filtres</button>
+      </span>
+    </div>
+    <div class="enveloppe-table"><table>
+      <thead><tr id="entetes"></tr></thead>
+      <tbody id="corps"></tbody>
+    </table></div>
+    <p class="info-txt" id="compte" style="margin-top:8px;"></p>
+    </div>
+  </div>`);
+
+  /* Barre de filtres rapide : la recherche tape en direct (le focus est
+     rendu au champ après le réaffichage), les listes au changement. */
+  racine.querySelector("#fl-q").oninput = (e) => {
+    App.barre.q = e.target.value; rafraichir();
+    const cible = document.getElementById("fl-q");
+    if (cible) { cible.focus(); cible.setSelectionRange(cible.value.length, cible.value.length); }
+  };
+  [["#fl-reseau", "reseau"], ["#fl-activite", "activite"], ["#fl-mode", "mode"], ["#fl-groupe", "groupe"]].forEach(([id, cle]) => {
+    racine.querySelector(id).onchange = (e) => { App.barre[cle] = e.target.value; rafraichir(); };
+  });
+  racine.querySelector("#fl-raz").onclick = () => {
+    App.barre = { q: "", reseau: "all", activite: "all", mode: "all", groupe: "all" };
+    rafraichir();
+  };
+
+  /* Entêtes de colonnes (demandes de Jules) :
+     - clic sur le titre : tri croissant → décroissant → retiré (cumulatif,
+       l'ordre de tri suit l'ordre des clics) ;
+     - bouton 🔎 : pop-up de filtre CENTRÉE dans la vue (champ toujours
+       visible), avec choix de l'opérateur + OK / Annuler / Retirer ;
+     - badge « filtré ✕ » : un clic retire le filtre. */
+  const entetes = racine.querySelector("#entetes");
+  cols.forEach(col => {
+    const th = document.createElement("th");
+    th.style.position = "relative";
+    if (col.cle === "__actions") {
+      th.innerHTML = "Actions";
+      th.style.textAlign = "right";
+      entetes.appendChild(th);
+      return;
+    }
+    const tri = App.tris.find(t => t.cle === col.cle);
+    th.innerHTML = `<span style="cursor:pointer;">${esc(col.label)}${col.calc ? ' <span class="etiquette">auto</span>' : ""}${tri ? (tri.asc ? " ▲" : " ▼") : ""}</span>${App.filtres[col.cle] ? ' <span class="etiquette f-badge" style="background:#fef9c3;cursor:pointer;" title="Cliquer pour retirer ce filtre">filtré ✕</span>' : ""} <button class="ico" title="Filtrer sur cette colonne">🔎</button>`;
+    th.querySelector("span").onclick = () => {
+      const t = App.tris.find(x => x.cle === col.cle);
+      if (!t) App.tris.push({ cle: col.cle, asc: true });      // 1er clic : croissant
+      else if (t.asc) t.asc = false;                            // 2e : décroissant
+      else App.tris = App.tris.filter(x => x.cle !== col.cle); // 3e : retiré
+      rafraichir();
+    };
+    // Badge « filtré ✕ » : retire le filtre en UN clic.
+    const badge = th.querySelector(".f-badge");
+    if (badge) badge.onclick = (e) => { e.stopPropagation(); delete App.filtres[col.cle]; rafraichir(); };
+    th.querySelector(".ico").onclick = (e) => {
+      e.stopPropagation();
+      // Le filtre s'ouvre dans une POP-UP CENTRÉE (pas d'ancre sous l'entête :
+      // le champ était masqué par le tableau — demande de Jules). Police
+      // réduite pour limiter les problèmes d'affichage.
+      const f = App.filtres[col.cle] || { op: "contient", txt: "" };
+      const box = h(`<div style="max-width:380px;">
+        <h2 style="font-size:16px;">🔎 Filtre — ${esc(col.label)}</h2>
+        <div class="champ"><label style="font-size:12px;">Opérateur</label>
+          <select id="f-op" style="font-size:12px;">${FILTRES_OPS.map(o => `<option value="${o}" ${f.op === o ? "selected" : ""}>${o}</option>`).join("")}</select></div>
+        <div class="champ"><label style="font-size:12px;">Valeur</label>
+          <input id="f-txt" value="${esc(f.txt)}" placeholder="texte…" style="font-size:12px;"/></div>
+        <div class="ligne-boutons">
+          <button id="f-del" style="font-size:12px;">✕ Retirer le filtre</button>
+          <button id="f-ann" style="font-size:12px;">Annuler</button>
+          <button id="f-ok" class="b-bleu" style="font-size:12px;">OK</button>
+        </div></div>`);
+      modal(box);
+      const tOp = box.querySelector("#f-op"), tTxt = box.querySelector("#f-txt");
+      tOp.onchange = () => { tTxt.disabled = tOp.value === "est vide" || tOp.value === "n'est pas vide"; };
+      tOp.onchange();
+      tTxt.focus();
+      const fermer = () => box.closest(".modal-fond").remove();
+      const ok = () => {
+        const op = tOp.value, v = tTxt.value.trim();
+        if (op === "est vide" || op === "n'est pas vide") App.filtres[col.cle] = { op, txt: "" };
+        else if (v) App.filtres[col.cle] = { op, txt: v };
+        else delete App.filtres[col.cle];
+        fermer(); rafraichir();
+      };
+      box.querySelector("#f-ok").onclick = ok;
+      tTxt.onkeydown = (e) => { if (e.key === "Enter") ok(); };
+      box.querySelector("#f-ann").onclick = fermer;
+      box.querySelector("#f-del").onclick = () => { delete App.filtres[col.cle]; fermer(); rafraichir(); };
+    };
+    entetes.appendChild(th);
+  });
+
+  /* Lignes du tableau : double-clic = modification (sélection multiple
+     retirée à la demande de Jules : elle ne servait à rien).
+     OPTIMISATION : le corps est construit en UNE SEULE écriture (un seul
+     innerHTML = un seul passage de mise en page) et les événements sont
+     DÉLÉGUÉS sur le tbody (2 écouteurs au total, au lieu de 3 boutons +
+     1 double-clic PAR ligne : sur 1000 lignes, ~4000 écouteurs → 2). */
+  const corps = racine.querySelector("#corps");
+  const cache = {};
+  dispo.forEach(col => {
+    if (col.join) cache[col.src] = new Map(d[col.src].map(x => [x.id, x.nom]));
+  });
+  corps.innerHTML = lignesAffichees.map(l =>
+    `<tr data-id="${esc(l.id)}">` + cols.map(col => col.cle === "__actions"
+      ? `<td style="text-align:right;"><button class="ico" data-act="mod" data-id="${esc(l.id)}" title="Modifier">✎</button><button class="ico suppr" data-act="sup" data-id="${esc(l.id)}" title="Supprimer">🗑</button></td>`
+      : `<td>${esc(valColonne(d, col, l, cache))}</td>`).join("") + `</tr>`
+  ).join("");
+  // Délégation : un seul écouteur « click » pour tous les boutons ✎/🗑.
+  corps.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-act]");
+    if (!b) return;
+    if (b.dataset.act === "mod") return modalLigne(b.dataset.id);
+    // Suppression : double confirmation (1er clic arme 3 s, 2e supprime).
+    if (b.classList.contains("armed")) {
+      d.lignes = d.lignes.filter(x => x.id !== b.dataset.id);
+      BD.sauver(); rafraichir(); return;
+    }
+    b.classList.add("armed"); b.textContent = "Confirmer ?";
+    setTimeout(() => { if (b.isConnected) { b.classList.remove("armed"); b.textContent = "🗑"; } }, 3000);
+  });
+  // Délégation : un seul écouteur « dblclick » pour tout le tableau.
+  corps.addEventListener("dblclick", (e) => {
+    if (e.target.closest("button")) return;
+    const tr = e.target.closest("tr");
+    if (tr) modalLigne(tr.dataset.id);
+  });
+  racine.querySelector("#compte").textContent =
+    `${lignesAffichees.length} ligne(s) affichée(s) sur ${d.lignes.length}` +
+    (Object.keys(App.filtres).length || App.tris.length
+      ? ` — ${Object.keys(App.filtres).length} filtre(s), ${App.tris.length} tri(s) actifs` : "");
+
+  // Menu ⚙ Colonnes : mise en page UNIFORME (grille : case | nom | flèches),
+  // panneau persistant jusqu'à « Appliquer », réordonnancement ↑ ↓, et
+  // position de la colonne Actions (début ou fin de tableau uniquement).
+  const bCol = racine.querySelector("#b-col");
+  bCol.onclick = () => {
+    const ancien = racine.querySelector(".panneau");
+    if (ancien) { ancien.remove(); return; }
+    let travail = [...App.colonnes];
+    dispo.forEach(c => { if (!c.fixe && c.cle !== "__actions" && !travail.includes(c.cle)) travail.push(c.cle); });
+    const cochees = new Set(App.colonnes);
+    const pan = h(`<div class="panneau" style="width:340px;">
+      <b style="font-size:13px;">Colonnes affichées</b>
+      <p class="info-txt" style="margin:2px 0 6px;">↑ ↓ réordonner · cocher/décocher · « Appliquer » enregistre.</p>
+      <div id="p-liste" style="max-height:300px;overflow-y:auto;"></div>
+      <div style="margin-top:6px;border-top:1px solid #e2e8f0;padding-top:6px;">
+        <button id="p-actions" style="width:100%;font-size:12px;"></button>
+      </div>
+      <div class="ligne-boutons" style="margin:6px 0 0;">
+        <button id="p-ann">✕ Fermer</button>
+        <button id="p-ok" class="b-bleu">Appliquer</button>
+      </div>
+    </div>`);
+    const majTxtActions = () => {
+      pan.querySelector("#p-actions").textContent =
+        `Colonne Actions : ${App.actionsDebut ? "au début" : "à la fin"} du tableau — cliquer pour changer`;
+    };
+    majTxtActions();
+    const dessiner = () => {
+      const box = pan.querySelector("#p-liste");
+      box.innerHTML = "";
+      travail.forEach((cle, i) => {
+        const col = dispo.find(c => c.cle === cle);
+        const l = h(`<label class="p-ligne">
+          <input type="checkbox" ${cochees.has(cle) || col.fixe ? "checked" : ""} ${col.fixe ? "disabled" : ""}/>
+          <span>${esc(col.label)}${col.fixe ? ' <span class="etiquette">fixe</span>' : ""}</span>
+          <button title="Monter" ${i === 0 ? "disabled" : ""}>↑</button>
+          <button title="Descendre" ${i === travail.length - 1 ? "disabled" : ""}>↓</button>
+        </label>`);
+        const cb = l.querySelector("input");
+        cb.onchange = () => cb.checked ? cochees.add(cle) : cochees.delete(cle);
+        const [haut, bas] = l.querySelectorAll("button");
+        haut.onclick = () => { travail.splice(i, 1); travail.splice(i - 1, 0, cle); dessiner(); };
+        bas.onclick = () => { travail.splice(i, 1); travail.splice(i + 1, 0, cle); dessiner(); };
+        box.appendChild(l);
+      });
+    };
+    dessiner();
+    pan.querySelector("#p-actions").onclick = () => {
+      // La colonne Actions ne se place qu'en début ou en fin de tableau.
+      App.actionsDebut = !App.actionsDebut;
+      majTxtActions();
+    };
+    pan.querySelector("#p-ann").onclick = () => pan.remove();
+    pan.querySelector("#p-ok").onclick = () => {
+      App.colonnes = travail.filter(cle => cochees.has(cle));
+      localStorage.setItem("hastus_colonnes_" + App.instanceOuverte.id, JSON.stringify(App.colonnes));
+      rafraichir();
+    };
+    bCol.parentElement.appendChild(pan);
+  };
+
+  // Copier vers Excel (demande de Jules) : TOUTES les colonnes brutes sont
+  // copiées (même non affichées) ; les colonnes OBLIGATOIRES portent une *
+  // dans leur nom ; après la copie, une fenêtre rappelle lesquelles.
+  racine.querySelector("#b-copy").onclick = () => {
+    copierExcelVersPressePapiers(d);
+    const oblig = COLONNES_MASSE.filter(c => c.oblig).map(c => c.label).join(", ");
+    const info = h(`<div>
+      <h2>📋 Copié pour Excel</h2>
+      <p class="info-txt">Le tableau complet (toutes les colonnes) est dans le presse-papiers : collez-le dans Excel avec Ctrl+V.</p>
+      <p class="info-txt">Les colonnes dont le nom porte une <b>*</b> — <b>${esc(oblig)}</b> — sont <b>obligatoires</b> :
+      à l'import, une valeur manquante est refusée, et une valeur inconnue est créée automatiquement (badge ⚠ dans le catalogue).</p>
+      <div class="ligne-boutons"><button id="b-ok" class="b-bleu">Fermer</button></div>
+    </div>`);
+    info.querySelector("#b-ok").onclick = () => info.closest(".modal-fond").remove();
+    modal(info);
+  };
+
+  // Importer : fichier du PC (CSV/texte) ou collage, avec prévisualisation.
+  racine.querySelector("#b-masse").onclick = () => modalImporter();
+
+  racine.querySelector("#b-nouv").onclick = () => modalLigne(null);
+  return racine;
+}
+
+/* Opérateurs disponibles pour le filtre d'une colonne (bulle 🔎). */
+const FILTRES_OPS = ["contient", "ne contient pas", "est égal à", "est différent de", "commence par", "finit par", "est vide", "n'est pas vide"];
+
+/* Colonnes de l'import/export Excel (● = obligatoire). Sert aussi au
+   « Copier (Excel) » : tout est copié, * sur les obligatoires. */
+const COLONNES_MASSE = [
+  { cle: "abrev", label: "Abrév.", oblig: true },
+  { cle: "nom", label: "Nom commercial", oblig: true },
+  { cle: "reseau", label: "Réseau", oblig: true },
+  { cle: "contrat", label: "Contrat" },
+  { cle: "activite", label: "Activité", oblig: true },
+  { cle: "mode", label: "Mode", oblig: true },
+  { cle: "groupe", label: "Groupe" }
+];
+function valMasse(d, l, cle) {
+  if (cle === "reseau") { const r = d.reseaux.find(x => x.id === l.reseauId); return r ? r.nom : ""; }
+  if (cle === "contrat") { const c = d.contrats.find(x => x.id === l.contratId); return c ? c.nom : ""; }
+  return l[cle] || "";
+}
+
+/* Trie et filtre les lignes selon l'état d'affichage. Cumulatif :
+   - filtres en ET (un par colonne, opérateur au choix, sans casse) ;
+   - tris enchaînés dans l'ordre des clics (1re colonne cliquée dominante).
+   OPTIMISATION : chaque cellule est calculée UNE SEULE fois (mémoïsation)
+   au lieu d'être recalculée à chaque filtre ET à chaque comparaison du tri
+   (le tri appelle la comparaison n·log(n) fois : le gain est énorme sur
+   les grandes tables). */
+function trierEtFiltrer(d, dispo) {
+  // Cache des jointures (réseau/contrat) : une Map par table au lieu d'un
+  // find() parcourant tout le tableau pour CHAQUE cellule.
+  const cache = {};
+  dispo.forEach(col => {
+    if (col.join) cache[col.src] = new Map(d[col.src].map(x => [x.id, x.nom]));
+  });
+  // Mémoïsation : id de ligne + clé de colonne → valeur déjà calculée.
+  const memo = new Map();
+  const cellule = (l, col) => {
+    let m = memo.get(l.id);
+    if (!m) { m = {}; memo.set(l.id, m); }
+    let v = m[col.cle];
+    if (v === undefined) { v = valColonne(d, col, l, cache); m[col.cle] = v; }
+    return v;
+  };
+  // Filtres (en ET, sans casse).
+  let liste = [...d.lignes];
+  // Barre de filtres rapide (recherche + listes déroulantes) : appliquée
+  // EN PLUS des filtres 🔎 de colonnes (toujours en ET).
+  const b = App.barre || {};
+  const nomsReseaux = cache.reseaux || new Map();
+  if (b.q || (b.reseau && b.reseau !== "all") || (b.activite && b.activite !== "all") || (b.mode && b.mode !== "all") || (b.groupe && b.groupe !== "all")) {
+    const q = String(b.q || "").trim().toLowerCase();
+    liste = liste.filter(l => {
+      if (b.reseau && b.reseau !== "all" && l.reseauId !== b.reseau) return false;
+      if (b.activite && b.activite !== "all" && (l.activite || "") !== b.activite) return false;
+      if (b.mode && b.mode !== "all" && (l.mode || "") !== b.mode) return false;
+      if (b.groupe && b.groupe !== "all" && (l.groupe || "") !== b.groupe) return false;
+      if (q) {
+        const texte = `${l.abrev || ""} ${l.nom || ""} ${nomsReseaux.get(l.reseauId) || ""} ${l.activite || ""} ${l.mode || ""} ${l.groupe || ""}`.toLowerCase();
+        if (!texte.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+  for (const [cle, f] of Object.entries(App.filtres)) {
+    const col = dispo.find(c => c.cle === cle);
+    if (!col || !f) continue;
+    const t = String(f.txt).toLowerCase();
+    const evalue = (v) => {
+      switch (f.op) {
+        case "ne contient pas":  return !v.includes(t);
+        case "est égal à":       return v === t;
+        case "est différent de": return v !== t;
+        case "commence par":     return v.startsWith(t);
+        case "finit par":        return v.endsWith(t);
+        case "est vide":         return !v;
+        case "n'est pas vide":   return !!v;
+        default:                 return v.includes(t);   // « contient »
+      }
+    };
+    liste = liste.filter(l => evalue(String(cellule(l, col)).toLowerCase()));
+  }
+  // Tris : colonnes de tri résolues UNE fois (pas à chaque comparaison),
+  // puis tri par décorations : chaque cellule n'est lue qu'une fois.
+  const tris = App.tris
+    .map(t => ({ t, col: dispo.find(c => c.cle === t.cle) }))
+    .filter(x => x.col);
+  const cleTri = (l) => tris.map(({ col }) => String(cellule(l, col)).toLowerCase()).join("\u0000");
+  const triCache = new Map();
+  const ordre = (l) => { let k = triCache.get(l.id); if (k === undefined) { k = cleTri(l); triCache.set(l.id, k); } return k; };
+  liste.sort((a, b) => {
+    const ka = ordre(a), kb = ordre(b);
+    if (ka === kb) return 0;
+    // Comparaison champ par champ pour respecter l'ordre des clics.
+    const va = ka.split("\u0000"), vb = kb.split("\u0000");
+    for (let i = 0; i < va.length; i++) {
+      const r = va[i].localeCompare(vb[i], "fr", { numeric: true });
+      if (r !== 0) return tris[i].t.asc ? r : -r;
+    }
+    return 0;
+  });
+  return liste;
+}
+
+/* TSV complet (toutes les colonnes brutes), * sur les obligatoires.
+   Utilisé par « Copier (Excel) » et par la fenêtre d'import. */
+function copierExcelVersPressePapiers(d) {
+  const tsv = COLONNES_MASSE.map(c => c.label + (c.oblig ? "*" : "")).join("\t") + "\n" +
+    d.lignes.map(l => COLONNES_MASSE.map(c => valMasse(d, l, c.cle)).join("\t")).join("\n");
+  navigator.clipboard?.writeText(tsv);
+  return tsv;
+}
+
+/* ---------- Importer : fichier du PC ou collage (demande de Jules) ----------
+   Fenêtre large : lecture d'un fichier CSV/texte exporté d'Excel (les .xlsx
+   sont binaires : on demande un enregistrement en CSV), ou collage direct,
+   puis PRÉVISUALISATION du résultat avant import :
+   - vert = création, orange = cellule modifiée, rouge = suspect (même nom
+     commercial qu'une ligne existante), gris = ligne ignorée ;
+   - à la validation : compte des créations/modifications + valeurs inconnues
+     créées automatiquement (badge ⚠ dans le catalogue) ;
+   - les suspects demandent une confirmation explicite. */
+function modalImporter() {
+  const d = BD.donneesInstance(App.instanceOuverte.id);
+  const form = h(`<div style="min-width:900px;max-width:95vw;">
+    <h2>Importer des lignes</h2>
+    <p class="info-txt">Colonnes : <b>${COLONNES_MASSE.map(c => c.label + (c.oblig ? "*" : "")).join(" — ")}</b> (* = obligatoire).
+      L'abréviation est la clé : existante → mise à jour, nouvelle → création.</p>
+    <div class="champ"><label>📂 Fichier du PC (CSV ou texte exporté d'Excel)</label>
+      <input type="file" id="m-fichier" accept=".csv,.txt,.tsv"/></div>
+    <div class="champ"><label>…ou collez les lignes ici (depuis Excel : Ctrl+C puis Ctrl+V)</label>
+      <textarea id="m-texte" rows="4" placeholder="Abrév&#9;Nom&#9;…"></textarea></div>
+    <div class="inline-flex" style="justify-content:space-between;width:100%;">
+      <button id="m-export">📋 Exporter les lignes actuelles vers Excel</button>
+      <span class="ligne-boutons" style="margin:0;"><button id="m-ann">Annuler</button>
+      <button id="m-prev" class="b-bleu">Prévisualiser l'import</button></span>
+    </div>
+  </div>`);
+  form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
+  form.querySelector("#m-export").onclick = () => {
+    copierExcelVersPressePapiers(d);
+    alert("Lignes actuelles copiées ! Collez-les dans Excel (Ctrl+V).");
+  };
+  form.querySelector("#m-prev").onclick = () => {
+    const fichier = form.querySelector("#m-fichier").files[0];
+    if (fichier) {
+      if (/\.(xlsx|xls)$/i.test(fichier.name)) {
+        alert("Le format .xlsx est un fichier binaire : dans Excel, faites « Fichier → Enregistrer sous → CSV (séparateur point-virgule) », puis réessayez.");
+        return;
+      }
+      const lecteur = new FileReader();
+      lecteur.onload = () => preparer(String(lecteur.result));
+      lecteur.readAsText(fichier);
+    } else {
+      const texte = form.querySelector("#m-texte").value;
+      if (!texte.trim()) { alert("Choisissez un fichier ou collez des lignes."); return; }
+      preparer(texte);
+    }
+  };
+  // Analyse sur une COPIE des données : rien n'est modifié avant l'import
+  // confirmé. La prévisualisation s'appuie sur cette même copie.
+  function preparer(texte) {
+    const plan = Noyau.appliquerColle(JSON.parse(JSON.stringify(d)), texte);
+    modalApercu(texte, plan);
+  }
+  modal(form, true);
+}
+
+/* Prévisualisation de l'import : le tableau complet en largeur, chaque
+   ligne colorée selon son devenir. Import réel identique au plan analysé. */
+function modalApercu(texte, plan) {
+  const d = BD.donneesInstance(App.instanceOuverte.id);
+  const lignesFichier = texte.trim().split(/\r?\n/).filter(r => r.trim());
+  const form = h(`<div style="min-width:900px;max-width:95vw;">
+    <h2>Prévisualisation de l'import</h2>
+    <p class="info-txt"><b>Légende :</b>
+      <span class="etiquette" style="background:#dcfce7;border-color:#86efac;color:#166534;">création</span>
+      <span class="etiquette" style="background:#ffedd5;border-color:#fdba74;color:#9a3412;">cellule modifiée</span>
+      <span class="etiquette" style="background:#fef2f2;border-color:#fca5a5;color:#991b1b;">suspect : nom déjà utilisé</span>
+      <span class="etiquette" style="background:#f1f5f9;color:#64748b;">ignorée</span></p>
+    <div class="enveloppe-table" style="max-height:320px;overflow-y:auto;"><table>
+      <thead><tr>${COLONNES_MASSE.map(c => `<th class="${c.oblig ? "th-oblig" : ""}">${c.label}${c.oblig ? " ●" : ""}</th>`).join("")}<th>Statut</th></tr></thead>
+      <tbody id="a-corps"></tbody>
+    </table></div>
+    <p class="info-txt" id="a-resume"></p>
+    <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-vert">Importer</button></div>
+  </div>`);
+  const corps = form.querySelector("#a-corps");
+  lignesFichier.forEach((row, idx) => {
+    const c = row.split(/\t|;/);
+    if (idx === 0 && /^abr/i.test((c[0] || "").trim())) return;
+    const tr = document.createElement("tr");
+    const abrev = (c[0] || "").trim();
+    if (!abrev) {
+      tr.innerHTML = `<td colspan="${COLONNES_MASSE.length}" style="color:#64748b;">${esc(row)}</td><td><span class="etiquette" style="background:#f1f5f9;color:#64748b;">ignorée</span></td>`;
+      corps.appendChild(tr);
+      return;
+    }
+    const existante = d.lignes.find(l => l.abrev.toLowerCase() === abrev.toLowerCase());
+    const suspecte = !existante && plan.suspects.some(s => s.abrev === abrev);
+    let statut, cls;
+    if (existante) { statut = "modification"; cls = "background:#ffedd5;border-color:#fdba74;color:#9a3412;"; }
+    else if (suspecte) { statut = "⚠ suspect : nom déjà utilisé"; cls = "background:#fef2f2;border-color:#fca5a5;color:#991b1b;"; }
+    else { statut = "création"; cls = "background:#dcfce7;border-color:#86efac;color:#166534;"; }
+    // Cellules : orange si la valeur diffère de la ligne existante.
+    tr.innerHTML = COLONNES_MASSE.map((col, i) => {
+      const nouvelle = (c[i] || "").trim();
+      const actuelle = existante ? valMasse(d, existante, col.cle) : "";
+      const modifiee = existante && nouvelle && nouvelle !== actuelle;
+      return `<td class="${modifiee ? "cell-loc" : ""}">${esc(nouvelle)}</td>`;
+    }).join("") + `<td><span class="etiquette" style="${cls}">${statut}</span></td>`;
+    corps.appendChild(tr);
+  });
+  const nv = Object.entries(plan.nouvellesValeurs || {});
+  form.querySelector("#a-resume").innerHTML =
+    `<b>${plan.crees}</b> création(s), <b>${plan.maj}</b> modification(s), ${plan.ignorees} ignorée(s).` +
+    (nv.length ? ` Valeurs inconnues qui seront créées : ${nv.map(([k, vs]) => `<b>${esc(k)}</b> → ${vs.map(esc).join(", ")}`).join(" ; ")} (badge ⚠ dans le catalogue).` : "") +
+    (plan.suspects.length ? ` <b>⚠ ${plan.suspects.length} suspect(s)</b> : ${plan.suspects.map(s => esc(s.abrev)).join(", ")}.` : "");
+  let confirme = false;
+  form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
+  form.querySelector("#m-ok").onclick = () => {
+    if (plan.suspects.length && !confirme) {
+      confirme = true;
+      form.querySelector("#m-ok").textContent = "Confirmer malgré les suspects";
+      form.querySelector("#a-resume").innerHTML += " Relancez le bouton pour importer quand même.";
+      return;
+    }
+    const res = Noyau.appliquerColle(d, texte);
+    BD.sauver();
+    form.closest(".modal-fond").remove(); rafraichir();
+    alert(`Import terminé : ${res.crees} création(s), ${res.maj} modification(s), ${res.ignorees} ignorée(s).` +
+      (Object.keys(res.nouvellesValeurs).length
+        ? ` Nouvelles valeurs à paramétrer : ${Object.entries(res.nouvellesValeurs).map(([k, vs]) => `${k} (${vs.join(", ")})`).join(" ; ")}.`
+        : ""));
+  };
+  modal(form, true);
+}
+
+/* Formulaire d'une ligne (création ou modification) avec validation métier. */
+function modalLigne(idLigne) {
+  const d = BD.donneesInstance(App.instanceOuverte.id);
+  const existante = idLigne ? d.lignes.find(l => l.id === idLigne) : null;
+  const init = existante || { abrev: "", nom: "", reseauId: "", contratId: null, activite: "", mode: "", groupe: "", vehicules: [], energies: [], fonctions: [] };
+  const cat = d.catalogue;
+  // Générateur de blocs à choix multiples (véhicules / énergies / fonctions).
+  const casesMultiples = (titre, catCle, prop) => `<div class="champ"><label>${titre} (plusieurs)</label>
+    <div class="inline-flex">${cat[catCle].labels.map(x =>
+      `<label class="libelle"><input type="checkbox" data-grp="${prop}" value="${esc(x.nom)}" ${init[prop].includes(x.nom) ? "checked" : ""}/> ${esc(x.nom)}</label>`).join("")}</div></div>`;
+  // Icône ℹ️ : au survol, la bulle indique quels champs sont publics
+  // (visibles dans les exports) et lesquels sont privés transporteur.
+  const aidePubPrive = `Champs PUBLICS (visibles dans les exports) : Abréviation, Nom commercial, Réseau, Activité, Mode de transport, Groupe, types de véhicule, énergies, fonctions embarquées. Champ PRIVÉ transporteur : Contrat.`;
+  const form = h(`<div>
+    <h2>${existante ? "Modifier" : "Créer"} une ligne <span class="aide-info" data-info="${esc(aidePubPrive)}">ℹ️</span></h2>
+    <div class="grille">
+      <div class="champ"><label>Abréviation (8 car. max)</label><input id="m-abrev" maxlength="8" value="${esc(init.abrev)}"/></div>
+      <div class="champ"><label>Nom commercial (64 car. max)</label><input id="m-nom" maxlength="64" value="${esc(init.nom)}"/></div>
+      <div class="champ"><label>Réseau</label><select id="m-reseau"><option value="">— Choisir —</option>
+        ${d.reseaux.map(r => `<option value="${r.id}" ${init.reseauId === r.id ? "selected" : ""}>${esc(r.nom)}</option>`).join("")}</select></div>
+      <div class="champ"><label>Contrat</label><select id="m-contrat"><option value="">— Aucun —</option>
+        ${d.contrats.map(c => `<option value="${c.id}" ${init.contratId === c.id ? "selected" : ""}>${esc(c.nom)}</option>`).join("")}</select></div>
+      <div class="champ"><label>Activité (1 seule)</label>
+        <select id="m-act"><option value="">— Choisir —</option>
+        ${cat["Activités"].labels.map(a => `<option ${init.activite === a.nom ? "selected" : ""}>${esc(a.nom)}</option>`).join("")}</select></div>
+      <div class="champ"><label>Mode de transport (1 seul)</label>
+        <select id="m-mode"><option value="">— Choisir —</option>
+        ${cat["Modes de transport"].labels.map(m => `<option ${init.mode === m.nom ? "selected" : ""}>${esc(m.nom)}</option>`).join("")}</select></div>
+      <div class="champ"><label>Groupe</label>
+        <select id="m-groupe"><option value="">— Aucun —</option>
+        ${cat["Groupes de lignes"].labels.map(g => `<option ${init.groupe === g.nom ? "selected" : ""}>${esc(g.nom)}</option>`).join("")}</select></div>
+    </div>
+    ${casesMultiples("Types de véhicule", "Types de véhicule", "vehicules")}
+    ${casesMultiples("Types d'énergie", "Types d'énergie", "energies")}
+    ${casesMultiples("Fonctions embarquées", "Fonctions embarquées", "fonctions")}
+    <div class="erreur" id="m-err"></div>
+    <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-bleu">Enregistrer</button></div>
+  </div>`);
+  modal(form);
+  form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
+  form.querySelector("#m-ok").onclick = () => {
+    const ligne = {
+      ...(existante || {}),
+      abrev: form.querySelector("#m-abrev").value,
+      nom: form.querySelector("#m-nom").value,
+      reseauId: form.querySelector("#m-reseau").value,
+      contratId: form.querySelector("#m-contrat").value || null,
+      activite: form.querySelector("#m-act").value,
+      mode: form.querySelector("#m-mode").value,
+      groupe: form.querySelector("#m-groupe").value,
+      vehicules: Array.from(form.querySelectorAll('[data-grp="vehicules"]:checked')).map(x => x.value),
+      energies: Array.from(form.querySelectorAll('[data-grp="energies"]:checked')).map(x => x.value),
+      fonctions: Array.from(form.querySelectorAll('[data-grp="fonctions"]:checked')).map(x => x.value)
+    };
+    // Validation métier AVANT enregistrement (mêmes règles que les tests automatiques).
+    const errs = Noyau.validerLigne(d, ligne, existante ? existante.id : null);
+    if (errs.length) { form.querySelector("#m-err").innerHTML = errs.map(e => "• " + esc(e)).join("<br/>"); return; }
+    if (existante) { Object.assign(existante, ligne); }
+    else { ligne.id = Noyau.nouvelId(d); d.lignes.push(ligne); }
+    BD.sauver(); form.closest(".modal-fond").remove(); rafraichir();
+  };
+}
+
+/* ---------- Vue : réseaux & contrats ---------- */
+function vueReseauxContrats() {
+  const d = BD.donneesInstance(App.instanceOuverte.id);
+  const racine = h(`<div style="width:90%;margin:0 auto;">
+    <div class="inline-flex" style="gap:12px;margin-bottom:12px;">
+      <span id="b-creer"></span>
+      <span class="vue-switch" id="switch"></span>
+    </div>
+    <div id="liste"></div>
+  </div>`);
+  const sw = racine.querySelector("#switch");
+  const bReseaux = h(`<button class="${App.vueObjet === "reseaux" ? "actif" : ""}">Tous les réseaux</button>`);
+  bReseaux.onclick = () => { App.vueObjet = "reseaux"; rafraichir(); };
+  const bContrats = h(`<button class="${App.vueObjet === "contrats" ? "actif" : ""}">Tous les contrats</button>`);
+  bContrats.onclick = () => { App.vueObjet = "contrats"; rafraichir(); };
+  sw.appendChild(bReseaux); sw.appendChild(bContrats);
+  const bCreer = racine.querySelector("#b-creer");
+  const liste = racine.querySelector("#liste");
+  const nbLignes = (pred) => d.lignes.filter(pred).length;
+
+  if (App.vueObjet === "reseaux") {
+    const b = h(`<button class="b-bleu">+ Créer un réseau</button>`);
+    b.onclick = () => modalReseau(null);
+    bCreer.appendChild(b);
+    if (!d.reseaux.length) liste.appendChild(h(`<p class="info-txt">Aucun réseau. Créez-en un : il sera disponible pour rattacher des lignes.</p>`));
+    d.reseaux.forEach(r => {
+      const carte = h(`<div class="carte">
+        <div><b>${esc(r.nom)}</b>
+          <div class="info-txt">Validité : ${esc(r.validiteDebut || "?")} → ${esc(r.validiteFin || "?")}</div></div>
+        <span class="inline-flex">
+          <span class="etiquette">${nbLignes(l => l.reseauId === r.id)} lignes</span>
+          <span class="etiquette">${d.contrats.filter(c => (c.reseaux || []).includes(r.id)).length} contrats</span>
+        </span>
+        <span class="inline-flex"></span>
+      </div>`);
+      const act = carte.lastElementChild;
+      const bM = h(`<button>Modifier</button>`); bM.onclick = () => modalReseau(r.id); act.appendChild(bM);
+      // Règle métier (Jules) : un réseau utilisé par des lignes OU des
+      // contrats ne peut pas être supprimé.
+      act.appendChild(boutonSupprimer("Supprimer", () => {
+        const u = Noyau.usagesReseau(d, r.id);
+        if (u.lignes.length || u.contrats.length) {
+          alert(`Impossible : réseau utilisé par ${u.lignes.length} ligne(s) et ${u.contrats.length} contrat(s). Utilisez 🔎 pour voir et nettoyer les utilisations.`);
+          return;
+        }
+        d.reseaux = d.reseaux.filter(x => x.id !== r.id); BD.sauver(); rafraichir();
+      }));
+      const bUse = h(`<button title="Où est-il utilisé ?">🔎</button>`);
+      bUse.onclick = () => modalUsages(r.nom, () => {
+        const u = Noyau.usagesReseau(d, r.id);
+        return [
+          ...u.lignes.map(l => ({
+            label: () => `Ligne <b>${esc(l.abrev)}</b> — ${esc(l.nom)}`,
+            modifier: () => modalLigne(l.id),
+            supprimer: () => { d.lignes = d.lignes.filter(x => x.id !== l.id); }
+          })),
+          ...u.contrats.map(c => ({
+            label: () => `Contrat <b>${esc(c.nom)}</b>`,
+            modifier: () => modalContrat(c.id),
+            supprimer: () => { d.contrats = d.contrats.filter(x => x.id !== c.id); }
+          }))
         ];
-        const copyText = rows.map(row => row.join('\t')).join('\n');
-        navigator.clipboard.writeText(copyText).then(() => alert('Tableau copié au format Excel / TSV.'));
       });
-
-      document.getElementById('importRowsBtn').addEventListener('click', () => {
-        const text = prompt('Collez vos lignes au format TSV ou CSV :\nAbrév\tNom\tRéseau\tContrat\tActivité\tMode\tGroupe');
-        if (text == null) return;
-        const store = getStore();
-        const instanceData = getInstanceData(state.instance.id);
-        applyBulkImport(instanceData, text);
-        store.data[state.instance.id] = instanceData;
-        saveStore(store);
-        render();
-      });
-
-      const searchInput = document.getElementById('lineSearch');
-      const networkSelect = document.getElementById('lineFilterNetwork');
-      const activitySelect = document.getElementById('lineFilterActivity');
-      const modeSelect = document.getElementById('lineFilterMode');
-
-      searchInput.addEventListener('input', () => {
-        state.tableFilters.query = searchInput.value;
-        render();
-      });
-      networkSelect.addEventListener('change', () => {
-        state.tableFilters.network = networkSelect.value;
-        render();
-      });
-      activitySelect.addEventListener('change', () => {
-        state.tableFilters.activity = activitySelect.value;
-        render();
-      });
-      modeSelect.addEventListener('change', () => {
-        state.tableFilters.mode = modeSelect.value;
-        render();
-      });
-
-      document.getElementById('resetFiltersBtn').addEventListener('click', () => {
-        state.tableFilters = {
-          query: '',
-          network: 'all',
-          activity: 'all',
-          mode: 'all',
-          sortBy: 'abrev',
-          sortDir: 'asc'
-        };
-        render();
-      });
-
-      document.getElementById('toggleSortBtn').addEventListener('click', () => {
-        state.tableFilters.sortDir = state.tableFilters.sortDir === 'asc' ? 'desc' : 'asc';
-        render();
-      });
-
-      document.querySelectorAll('.sort-col').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const sortBy = btn.dataset.sort;
-          if (state.tableFilters.sortBy === sortBy) {
-            state.tableFilters.sortDir = state.tableFilters.sortDir === 'asc' ? 'desc' : 'asc';
-          } else {
-            state.tableFilters.sortBy = sortBy;
-            state.tableFilters.sortDir = 'asc';
-          }
-          render();
-        });
-      });
-
-      document.querySelectorAll('.edit-line').forEach(btn => {
-        btn.addEventListener('click', () => openLineModal(btn.dataset.id));
-      });
-
-      document.querySelectorAll('.delete-line').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const id = btn.dataset.id;
-          const store = getStore();
-          const data = getInstanceData(state.instance.id);
-          data.lines = data.lines.filter(line => line.id !== id);
-          store.data[state.instance.id] = data;
-          saveStore(store);
-          render();
-        });
-      });
-    }
-
-    function getFilteredLines(data) {
-      const query = (state.tableFilters.query || '').trim().toLowerCase();
-      let rows = data.lines.filter(line => {
-        const networkName = findNetworkName(data, line.reseauId).toLowerCase();
-        const text = `${line.abrev || ''} ${line.nom || ''} ${networkName} ${line.activite || ''} ${line.mode || ''}`.toLowerCase();
-        const matchesQuery = !query || text.includes(query);
-        const matchesNetwork = state.tableFilters.network === 'all' || line.reseauId === state.tableFilters.network;
-        const matchesActivity = state.tableFilters.activity === 'all' || line.activite === state.tableFilters.activity;
-        const matchesMode = state.tableFilters.mode === 'all' || line.mode === state.tableFilters.mode;
-        return matchesQuery && matchesNetwork && matchesActivity && matchesMode;
-      });
-
-      rows.sort((a, b) => {
-        const dir = state.tableFilters.sortDir === 'asc' ? 1 : -1;
-        const aValue = String(a[state.tableFilters.sortBy] ?? '').toLowerCase();
-        const bValue = String(b[state.tableFilters.sortBy] ?? '').toLowerCase();
-        return aValue.localeCompare(bValue, undefined, { numeric: true }) * dir;
-      });
-
-      return rows;
-    }
-
-    function renderLinesTableRows(lines, data) {
-      if (!lines.length) {
-        return `<tr><td colspan="9"><div class="empty-state">Aucune ligne ne correspond aux filtres.</div></td></tr>`;
-      }
-
-      return lines.map(line => {
-        const networkName = findNetworkName(data, line.reseauId);
-        const contractName = findContractName(data, line.contratId);
-        const statusClass = line.activite && line.mode ? 'success' : 'warning';
-        const statusLabel = line.activite && line.mode ? 'Valide' : 'À compléter';
-
-        return `
-          <tr>
-            <td><strong>${escapeHtml(line.abrev || '')}</strong></td>
-            <td>${escapeHtml(line.nom || '')}</td>
-            <td>${escapeHtml(networkName)}</td>
-            <td>${escapeHtml(contractName)}</td>
-            <td>${escapeHtml(line.activite || '')}</td>
-            <td>${escapeHtml(line.mode || '')}</td>
-            <td>${escapeHtml(line.groupe || '')}</td>
-            <td><span class="status-chip ${statusClass}">${statusLabel}</span></td>
-            <td>
-              <div class="row-actions">
-                <button class="small edit-line" data-id="${line.id}">Modifier</button>
-                <button class="small danger delete-line" data-id="${line.id}">Supprimer</button>
-              </div>
-            </td>
-          </tr>
-        `;
-      }).join('');
-    }
-
-    function renderNetworksView(data, inst) {
-      return `
-        <div class="card transport-panel">
-          <div class="toolbar">
-            <div class="toolbar-title">Réseaux et contrats</div>
-            <div class="toolbar-actions">
-              <button id="addNetworkBtn" class="primary">+ Nouveau réseau</button>
-              <button id="addContractBtn">+ Nouveau contrat</button>
-            </div>
-          </div>
-          <div class="summary-grid">
-            <div class="card stat">
-              <span class="label">Réseaux</span>
-              <div class="value">${data.networks.length}</div>
-            </div>
-            <div class="card stat">
-              <span class="label">Contrats</span>
-              <div class="value">${data.contracts.length}</div>
-            </div>
-          </div>
-          <div class="row" style="margin-top:6px;">
-            <div class="card" style="padding:18px; flex:1; min-width:260px;">
-              <h3>Réseaux</h3>
-              ${renderNetworksList(data)}
-            </div>
-            <div class="card" style="padding:18px; flex:1; min-width:260px;">
-              <h3>Contrats</h3>
-              ${renderContractsList(data)}
-            </div>
-          </div>
-        </div>
-      `;
-    }
-
-    function bindNetworksView() {
-      document.getElementById('addNetworkBtn').addEventListener('click', () => openNetworkModal());
-      document.getElementById('addContractBtn').addEventListener('click', () => openContractModal());
-
-      document.querySelectorAll('.edit-network').forEach(btn => {
-        btn.addEventListener('click', () => openNetworkModal(btn.dataset.id));
-      });
-      document.querySelectorAll('.delete-network').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const id = btn.dataset.id;
-          const store = getStore();
-          const data = getInstanceData(state.instance.id);
-          data.networks = data.networks.filter(net => net.id !== id);
-          data.lines.forEach(line => {
-            if (line.reseauId === id) line.reseauId = null;
-          });
-          store.data[state.instance.id] = data;
-          saveStore(store);
-          render();
-        });
-      });
-
-      document.querySelectorAll('.edit-contract').forEach(btn => {
-        btn.addEventListener('click', () => openContractModal(btn.dataset.id));
-      });
-      document.querySelectorAll('.delete-contract').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const id = btn.dataset.id;
-          const store = getStore();
-          const data = getInstanceData(state.instance.id);
-          data.contracts = data.contracts.filter(contract => contract.id !== id);
-          data.lines.forEach(line => {
-            if (line.contratId === id) line.contratId = null;
-          });
-          store.data[state.instance.id] = data;
-          saveStore(store);
-          render();
-        });
-      });
-    }
-
-    function renderNetworksList(data) {
-      if (!data.networks.length) return '<div class="empty-state">Aucun réseau.</div>';
-      return `
-        <div class="stack">
-          ${data.networks.map(net => `
-            <div class="tag-card">
-              <div class="meta">
-                <span class="tag-name">${escapeHtml(net.name)}</span>
-              </div>
-              <div class="tag-actions">
-                <button class="small edit-network" data-id="${net.id}">Modifier</button>
-                <button class="small danger delete-network" data-id="${net.id}">Supprimer</button>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      `;
-    }
-
-    function renderContractsList(data) {
-      if (!data.contracts.length) return '<div class="empty-state">Aucun contrat.</div>';
-      return `
-        <div class="stack">
-          ${data.contracts.map(contract => `
-            <div class="tag-card">
-              <div class="meta">
-                <span class="tag-name">${escapeHtml(contract.name)}</span>
-              </div>
-              <div class="tag-actions">
-                <button class="small edit-contract" data-id="${contract.id}">Modifier</button>
-                <button class="small danger delete-contract" data-id="${contract.id}">Supprimer</button>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      `;
-    }
-
-    function renderCatalogueView(data, inst) {
-      const sectionNames = Object.keys(data.catalogue);
-      const current = state.catalogSection || sectionNames[0];
-      const labels = data.catalogue[current]?.labels || [];
-      return `
-        <div class="catalogue-layout">
-          <aside class="card side-menu">
-            <div class="menu">
-              ${sectionNames.map(name => `
-                <button class="side-item ${current === name ? 'active' : ''}" data-section="${name}">${name}</button>
-              `).join('')}
-            </div>
-          </aside>
-          <div class="card catalogue-panel">
-            <div class="catalogue-header">
-              <div>
-                <h2>${escapeHtml(current)}</h2>
-                <div class="muted">${labels.length} libellés</div>
-              </div>
-              <button id="addCatalogueItemBtn" class="primary">+ Ajouter</button>
-            </div>
-            <div class="catalogue-list">
-              ${labels.map((label, index) => `
-                <div class="tag-card">
-                  <div class="meta">
-                    <span class="dot ${label.origin === 'local' ? 'local' : ''}"></span>
-                    <span class="tag-name">${escapeHtml(label.nom)}</span>
-                  </div>
-                  <div class="tag-actions">
-                    <button class="small edit-catalogue" data-section="${current}" data-index="${index}">✏️</button>
-                    <button class="small danger delete-catalogue" data-section="${current}" data-index="${index}">🗑</button>
-                  </div>
-                </div>
-              `).join('') || '<div class="empty-state" style="grid-column: 1 / -1;">Aucun libellé dans cette catégorie.</div>'}
-            </div>
-          </div>
-        </div>
-      `;
-    }
-
-    function bindCatalogueView() {
-      document.querySelectorAll('.side-item').forEach(btn => {
-        btn.addEventListener('click', () => {
-          state.catalogSection = btn.dataset.section;
-          render();
-        });
-      });
-
-      document.getElementById('addCatalogueItemBtn').addEventListener('click', () => {
-        openCatalogueModal(state.catalogSection, null);
-      });
-
-      document.querySelectorAll('.edit-catalogue').forEach(btn => {
-        btn.addEventListener('click', () => openCatalogueModal(btn.dataset.section, Number(btn.dataset.index)));
-      });
-
-      document.querySelectorAll('.delete-catalogue').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const store = getStore();
-          const data = getInstanceData(state.instance.id);
-          const section = btn.dataset.section;
-          const index = Number(btn.dataset.index);
-          const labels = data.catalogue[section]?.labels || [];
-          if (index < 0 || index >= labels.length) return;
-          const label = labels[index];
-          const used = data.lines.filter(line => {
-            const values = [line.activite, line.mode, line.groupe, ...(line.vehicules || []), ...(line.energies || []), ...(line.fonctions || [])];
-            return values.includes(label.nom);
-          });
-          if (used.length) {
-            alert(`Impossible de supprimer ce libellé. Il est utilisé par ${used.length} ligne(s).`);
-            return;
-          }
-          labels.splice(index, 1);
-          store.data[state.instance.id] = data;
-          saveStore(store);
-          render();
-        });
-      });
-    }
-
-    function openInstanceModal(mode, instanceId = null) {
-      const store = getStore();
-      const existing = instanceId ? store.instances.find(inst => inst.id === instanceId) : null;
-      const modalEl = document.createElement('div');
-      modalEl.className = 'modal-backdrop';
-      modalEl.innerHTML = `
-        <div class="modal">
-          <div class="header">
-            <h2>${mode === 'create' ? 'Créer une instance' : 'Modifier l\'instance'}</h2>
-            <button class="ghost close-modal">Fermer</button>
-          </div>
-          <div class="stack">
-            <div class="field">
-              <label>Nom</label>
-              <input id="instanceName" value="${escapeHtml(existing ? existing.name : '')}" maxlength="32" />
-            </div>
-            <div class="field">
-              <label>Description</label>
-              <textarea id="instanceDescription" maxlength="256">${escapeHtml(existing ? existing.description : '')}</textarea>
-            </div>
-            <div class="error" id="instanceError"></div>
-          </div>
-          <div class="modal-actions">
-            <button class="close-modal">Annuler</button>
-            <button class="primary" id="confirmInstanceBtn">${mode === 'create' ? 'Créer' : 'Enregistrer'}</button>
-          </div>
-        </div>
-      `;
-
-      document.body.appendChild(modalEl);
-      modalEl.querySelector('.close-modal').addEventListener('click', () => modalEl.remove());
-
-      modalEl.querySelector('#confirmInstanceBtn').addEventListener('click', () => {
-        const name = modalEl.querySelector('#instanceName').value.trim();
-        const description = modalEl.querySelector('#instanceDescription').value.trim();
-        const err = modalEl.querySelector('#instanceError');
-
-        if (!name) {
-          err.textContent = 'Le nom de l\'instance est obligatoire.';
-          return;
-        }
-
-        if (mode === 'create') {
-          const instance = {
-            id: uid('i'),
-            name,
-            description,
-            ownerId: currentUser().id,
-            members: []
-          };
-          store.instances.push(instance);
-          store.data[instance.id] = createEmptyData();
-        } else {
-          const inst = store.instances.find(i => i.id === instanceId);
-          if (!inst) return;
-          inst.name = name;
-          inst.description = description;
-        }
-
-        saveStore(store);
-        modalEl.remove();
-        render();
-      });
-    }
-
-    function duplicateInstanceModal(instanceId) {
-      const store = getStore();
-      const copy = store.instances.find(inst => inst.id === instanceId);
-      if (!copy) return;
-      const name = `${copy.name} (copie)`;
-      const cloned = JSON.parse(JSON.stringify(store.data[instanceId] || createEmptyData()));
-      const id = uid('i');
-      store.instances.push({
-        id,
-        name,
-        description: copy.description,
-        ownerId: currentUser().id,
-        members: []
-      });
-      store.data[id] = cloned;
-      saveStore(store);
-      render();
-    }
-
-    function editInstanceModal(instanceId) {
-      openInstanceModal('edit', instanceId);
-    }
-
-    function openNetworkModal(networkId = null) {
-      const store = getStore();
-      const data = getInstanceData(state.instance.id);
-      const existing = networkId ? data.networks.find(n => n.id === networkId) : null;
-      const modalEl = document.createElement('div');
-      modalEl.className = 'modal-backdrop';
-      modalEl.innerHTML = `
-        <div class="modal">
-          <div class="header">
-            <h2>${existing ? 'Modifier le réseau' : 'Nouveau réseau'}</h2>
-            <button class="ghost close-modal">Fermer</button>
-          </div>
-          <div class="field">
-            <label>Nom du réseau</label>
-            <input id="networkName" value="${escapeHtml(existing ? existing.name : '')}" />
-          </div>
-          <div class="error" id="networkError"></div>
-          <div class="modal-actions">
-            <button class="close-modal">Annuler</button>
-            <button class="primary" id="saveNetwork">Enregistrer</button>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(modalEl);
-      modalEl.querySelector('.close-modal').addEventListener('click', () => modalEl.remove());
-      modalEl.querySelector('#saveNetwork').addEventListener('click', () => {
-        const name = modalEl.querySelector('#networkName').value.trim();
-        if (!name) {
-          modalEl.querySelector('#networkError').textContent = 'Le nom du réseau est obligatoire.';
-          return;
-        }
-        const store = getStore();
-        const data = getInstanceData(state.instance.id);
-        if (existing) {
-          existing.name = name;
-        } else {
-          data.networks.push({ id: uid('n'), name, validiteDebut: '', validiteFin: '' });
-        }
-        store.data[state.instance.id] = data;
-        saveStore(store);
-        modalEl.remove();
-        render();
-      });
-    }
-
-    function openContractModal(contractId = null) {
-      const store = getStore();
-      const data = getInstanceData(state.instance.id);
-      const existing = contractId ? data.contracts.find(c => c.id === contractId) : null;
-      const modalEl = document.createElement('div');
-      modalEl.className = 'modal-backdrop';
-      modalEl.innerHTML = `
-        <div class="modal">
-          <div class="header">
-            <h2>${existing ? 'Modifier le contrat' : 'Nouveau contrat'}</h2>
-            <button class="ghost close-modal">Fermer</button>
-          </div>
-          <div class="field">
-            <label>Nom du contrat</label>
-            <input id="contractName" value="${escapeHtml(existing ? existing.name : '')}" />
-          </div>
-          <div class="error" id="contractError"></div>
-          <div class="modal-actions">
-            <button class="close-modal">Annuler</button>
-            <button class="primary" id="saveContract">Enregistrer</button>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(modalEl);
-      modalEl.querySelector('.close-modal').addEventListener('click', () => modalEl.remove());
-      modalEl.querySelector('#saveContract').addEventListener('click', () => {
-        const name = modalEl.querySelector('#contractName').value.trim();
-        if (!name) {
-          modalEl.querySelector('#contractError').textContent = 'Le nom du contrat est obligatoire.';
-          return;
-        }
-        const store = getStore();
-        const data = getInstanceData(state.instance.id);
-        if (existing) {
-          existing.name = name;
-        } else {
-          data.contracts.push({ id: uid('c'), name, reseaux: [], prive: false });
-        }
-        store.data[state.instance.id] = data;
-        saveStore(store);
-        modalEl.remove();
-        render();
-      });
-    }
-
-    function openLineModal(lineId = null) {
-      const store = getStore();
-      const data = getInstanceData(state.instance.id);
-      const existing = lineId ? data.lines.find(line => line.id === lineId) : null;
-      const modalEl = document.createElement('div');
-      modalEl.className = 'modal-backdrop';
-      modalEl.innerHTML = `
-        <div class="modal large">
-          <div class="header">
-            <h2>${existing ? 'Modifier la ligne' : 'Nouvelle ligne'}</h2>
-            <button class="ghost close-modal">Fermer</button>
-          </div>
-          <div class="row">
-            <div class="field">
-              <label>Abréviation</label>
-              <input id="lineAbrev" value="${escapeHtml(existing ? existing.abrev : '')}" maxlength="8" />
-            </div>
-            <div class="field">
-              <label>Nom commercial</label>
-              <input id="lineNom" value="${escapeHtml(existing ? existing.nom : '')}" maxlength="64" />
-            </div>
-          </div>
-          <div class="row">
-            <div class="field">
-              <label>Réseau</label>
-              <select id="lineReseau">
-                <option value="">— Choisir —</option>
-                ${data.networks.map(net => `<option value="${net.id}" ${existing && existing.reseauId === net.id ? 'selected' : ''}>${escapeHtml(net.name)}</option>`).join('')}
-              </select>
-            </div>
-            <div class="field">
-              <label>Contrat</label>
-              <select id="lineContrat">
-                <option value="">— Choisir —</option>
-                ${data.contracts.map(contract => `<option value="${contract.id}" ${existing && existing.contratId === contract.id ? 'selected' : ''}>${escapeHtml(contract.name)}</option>`).join('')}
-              </select>
-            </div>
-          </div>
-          <div class="row">
-            <div class="field">
-              <label>Activité</label>
-              <select id="lineActivite">
-                <option value="">— Choisir —</option>
-                ${getCatalogueOptions(data, 'Activités').map(opt => `<option value="${escapeHtml(opt.nom)}" ${existing && existing.activite === opt.nom ? 'selected' : ''}>${escapeHtml(opt.nom)}</option>`).join('')}
-              </select>
-            </div>
-            <div class="field">
-              <label>Mode</label>
-              <select id="lineMode">
-                <option value="">— Choisir —</option>
-                ${getCatalogueOptions(data, 'Modes de transport').map(opt => `<option value="${escapeHtml(opt.nom)}" ${existing && existing.mode === opt.nom ? 'selected' : ''}>${escapeHtml(opt.nom)}</option>`).join('')}
-              </select>
-            </div>
-          </div>
-          <div class="field">
-            <label>Groupe</label>
-            <select id="lineGroupe">
-              <option value="">— Choisir —</option>
-              ${getCatalogueOptions(data, 'Groupes de lignes').map(opt => `<option value="${escapeHtml(opt.nom)}" ${existing && existing.groupe === opt.nom ? 'selected' : ''}>${escapeHtml(opt.nom)}</option>`).join('')}
-            </select>
-          </div>
-          <div class="error" id="lineError"></div>
-          <div class="modal-actions">
-            <button class="close-modal">Annuler</button>
-            <button class="primary" id="saveLine">Enregistrer</button>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(modalEl);
-      modalEl.querySelector('.close-modal').addEventListener('click', () => modalEl.remove());
-      modalEl.querySelector('#saveLine').addEventListener('click', () => {
-        const abrev = modalEl.querySelector('#lineAbrev').value.trim();
-        const nom = modalEl.querySelector('#lineNom').value.trim();
-        const reseauId = modalEl.querySelector('#lineReseau').value || null;
-        const contratId = modalEl.querySelector('#lineContrat').value || null;
-        const activite = modalEl.querySelector('#lineActivite').value || '';
-        const mode = modalEl.querySelector('#lineMode').value || '';
-        const groupe = modalEl.querySelector('#lineGroupe').value || '';
-        const err = modalEl.querySelector('#lineError');
-
-        if (!abrev || !nom || !reseauId || !activite || !mode) {
-          err.textContent = 'Abréviation, nom, réseau, activité et mode sont obligatoires.';
-          return;
-        }
-
-        const instanceData = getInstanceData(state.instance.id);
-        const linePayload = {
-          id: existing ? existing.id : uid('l'),
-          abrev,
-          nom,
-          reseauId,
-          contratId,
-          activite,
-          mode,
-          groupe,
-          vehicules: existing ? existing.vehicules || [] : [],
-          energies: existing ? existing.energies || [] : [],
-          fonctions: existing ? existing.fonctions || [] : []
-        };
-
-        if (existing) {
-          const idx = instanceData.lines.findIndex(line => line.id === existing.id);
-          instanceData.lines[idx] = linePayload;
-        } else {
-          instanceData.lines.push(linePayload);
-        }
-
-        store.data[state.instance.id] = instanceData;
-        saveStore(store);
-        modalEl.remove();
-        render();
-      });
-    }
-
-    function openCatalogueModal(section, index = null) {
-      const store = getStore();
-      const data = getInstanceData(state.instance.id);
-      const labels = data.catalogue[section]?.labels || [];
-      const existing = index != null ? labels[index] : null;
-      const modalEl = document.createElement('div');
-      modalEl.className = 'modal-backdrop';
-      modalEl.innerHTML = `
-        <div class="modal">
-          <div class="header">
-            <h2>${existing ? 'Modifier le libellé' : 'Ajouter un libellé'}</h2>
-            <button class="ghost close-modal">Fermer</button>
-          </div>
-          <div class="field">
-            <label>Libellé</label>
-            <input id="catalogueLabel" value="${escapeHtml(existing ? existing.nom : '')}" maxlength="32" />
-          </div>
-          <div class="error" id="catalogueError"></div>
-          <div class="modal-actions">
-            <button class="close-modal">Annuler</button>
-            <button class="primary" id="saveCatalogueItem">Enregistrer</button>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(modalEl);
-      modalEl.querySelector('.close-modal').addEventListener('click', () => modalEl.remove());
-      modalEl.querySelector('#saveCatalogueItem').addEventListener('click', () => {
-        const value = modalEl.querySelector('#catalogueLabel').value.trim();
-        if (!value) {
-          modalEl.querySelector('#catalogueError').textContent = 'Le libellé est obligatoire.';
-          return;
-        }
-
-        const data = getInstanceData(state.instance.id);
-        if (existing) {
-          existing.nom = value;
-          existing.origin = 'local';
-        } else {
-          data.catalogue[section].labels.push({ nom: value, origin: 'local', codes: {} });
-        }
-
-        const store = getStore();
-        store.data[state.instance.id] = data;
-        saveStore(store);
-        modalEl.remove();
-        render();
-      });
-    }
-
-    function countCatalogueAlerts(data) {
-      let count = 0;
-      Object.values(data.catalogue).forEach(cat => {
-        cat.labels.forEach(label => {
-          if (label.origin === 'local' && !(label.codes && label.codes.export)) count += 1;
-        });
-      });
-      return count;
-    }
-
-    function getCatalogueOptions(data, category) {
-      return (data.catalogue[category]?.labels || []).map(label => ({ ...label }));
-    }
-
-    function findNetworkName(data, id) {
-      const item = (data.networks || []).find(net => net.id === id);
-      return item ? item.name : '—';
-    }
-
-    function findContractName(data, id) {
-      const item = (data.contracts || []).find(contract => contract.id === id);
-      return item ? item.name : '—';
-    }
-
-    function applyBulkImport(data, text) {
-      const lines = text.split(/\r?\n/).filter(Boolean);
-      for (const row of lines) {
-        const values = row.split(/\t|;/).map(v => v.trim());
-        if (!values[0]) continue;
-        const abrev = values[0].slice(0, 8);
-        const nom = values[1]?.slice(0, 64) || '';
-        const networkName = values[2]?.slice(0, 32) || '';
-        const contractName = values[3]?.slice(0, 32) || '';
-        const activite = values[4]?.slice(0, 32) || '';
-        const mode = values[5]?.slice(0, 32) || '';
-        const groupe = values[6]?.slice(0, 32) || '';
-
-        let network = data.networks.find(net => net.name.toLowerCase() === networkName.toLowerCase());
-        if (!network && networkName) {
-          network = { id: uid('n'), name: networkName, validiteDebut: '', validiteFin: '' };
-          data.networks.push(network);
-        }
-
-        let contract = null;
-        if (contractName) {
-          contract = data.contracts.find(c => c.name.toLowerCase() === contractName.toLowerCase());
-        }
-
-        if (!data.catalogue['Activités'].labels.some(label => label.nom.toLowerCase() === activite.toLowerCase()) && activite) {
-          data.catalogue['Activités'].labels.push({ nom: activite, origin: 'local', codes: {} });
-        }
-        if (!data.catalogue['Modes de transport'].labels.some(label => label.nom.toLowerCase() === mode.toLowerCase()) && mode) {
-          data.catalogue['Modes de transport'].labels.push({ nom: mode, origin: 'local', codes: {} });
-        }
-        if (!data.catalogue['Groupes de lignes'].labels.some(label => label.nom.toLowerCase() === groupe.toLowerCase()) && groupe) {
-          data.catalogue['Groupes de lignes'].labels.push({ nom: groupe, origin: 'local', codes: {} });
-        }
-
-        const existing = data.lines.find(line => line.abrev.toLowerCase() === abrev.toLowerCase());
-        if (existing) {
-          if (nom) existing.nom = nom;
-          if (network) existing.reseauId = network.id;
-          if (contract) existing.contratId = contract.id;
-          if (activite) existing.activite = activite;
-          if (mode) existing.mode = mode;
-          if (groupe) existing.groupe = groupe;
-        } else {
-          data.lines.push({
-            id: uid('l'),
-            abrev,
-            nom,
-            reseauId: network ? network.id : null,
-            contratId: contract ? contract.id : null,
-            activite,
-            mode,
-            groupe,
-            vehicules: [],
-            energies: [],
-            fonctions: []
-          });
-        }
-      }
-    }
-
-    function runCoreTests() {
-      const data = createEmptyData();
-      const results = [];
-      data.networks.push({ id: 'r1', name: 'Réseau test' });
-      data.contracts.push({ id: 'c1', name: 'Contrat test', reseaux: [], prive: false });
-      data.lines.push({ id: 'l1', abrev: 'A1', nom: 'Ligne A', reseauId: 'r1', contratId: 'c1', activite: 'Urbaine', mode: 'Autobus', groupe: '', vehicules: [], energies: [], fonctions: [] });
-
-      if (data.lines.length === 1) results.push('✅ initialisation');
-      if (data.networks[0].name === 'Réseau test') results.push('✅ réseau');
-      if (data.catalogue['Activités'].labels.some(v => v.nom === 'Urbaine')) results.push('✅ catalogue');
-      if (data.lines[0].abrev === 'A1') results.push('✅ ligne');
-
-      return results.join('\n') || 'Aucun test exécuté.';
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-      const store = getStore();
-      if (!Array.isArray(store.users)) {
-        store.users = [];
-        saveStore(store);
-      }
-      render();
+      act.appendChild(bUse);
+      liste.appendChild(carte);
     });
-  </script>
+  } else {
+    const b = h(`<button class="b-bleu">+ Créer un contrat</button>`);
+    b.onclick = () => modalContrat(null);
+    bCreer.appendChild(b);
+    if (!d.contrats.length) liste.appendChild(h(`<p class="info-txt">Aucun contrat. Les contrats sont des objets privés transporteur.</p>`));
+    d.contrats.forEach(c => {
+      const carte = h(`<div class="carte">
+        <div><b>${esc(c.nom)}</b>
+          <div class="info-txt">Réseaux : ${d.reseaux.filter(r => (c.reseaux || []).includes(r.id)).map(r => esc(r.nom)).join(", ") || "—"}</div></div>
+        <span class="inline-flex"><span class="etiquette">${nbLignes(l => l.contratId === c.id)} lignes</span></span>
+        <span class="inline-flex"></span>
+      </div>`);
+      const act = carte.lastElementChild;
+      const bM = h(`<button>Modifier</button>`); bM.onclick = () => modalContrat(c.id); act.appendChild(bM);
+      // Règle métier (Jules) : un contrat utilisé par des lignes ne peut
+      // pas être supprimé.
+      act.appendChild(boutonSupprimer("Supprimer", () => {
+        const u = Noyau.usagesContrat(d, c.id);
+        if (u.lignes.length) { alert(`Impossible : contrat utilisé par ${u.lignes.length} ligne(s). Utilisez 🔎 pour voir et nettoyer les utilisations.`); return; }
+        d.contrats = d.contrats.filter(x => x.id !== c.id); BD.sauver(); rafraichir();
+      }));
+      const bUse = h(`<button title="Où est-il utilisé ?">🔎</button>`);
+      bUse.onclick = () => modalUsages(c.nom, () =>
+        Noyau.usagesContrat(d, c.id).lignes.map(l => ({
+          label: () => `Ligne <b>${esc(l.abrev)}</b> — ${esc(l.nom)}`,
+          modifier: () => modalLigne(l.id),
+          supprimer: () => { d.lignes = d.lignes.filter(x => x.id !== l.id); }
+        })));
+      act.appendChild(bUse);
+      liste.appendChild(carte);
+    });
+  }
+  return racine;
+}
+
+/* Formulaire réseau : nom + période de validité (bornée à 2099). */
+function modalReseau(idReseau) {
+  const d = BD.donneesInstance(App.instanceOuverte.id);
+  const r = idReseau ? d.reseaux.find(x => x.id === idReseau) : null;
+  const form = h(`<div>
+    <h2>${r ? "Modifier" : "Créer"} un réseau</h2>
+    <div class="champ"><label>Nom du réseau (32 car. max)</label><input id="m-nom" maxlength="32" value="${r ? esc(r.nom) : ""}"/></div>
+    <div class="grille">
+      <div class="champ"><label>Début de validité</label><input id="m-deb" type="date" value="${r ? esc(r.validiteDebut) : ""}"/></div>
+      <div class="champ"><label>Fin de validité (jusqu'à 2099)</label><input id="m-fin" type="date" min="2020-01-01" max="2099-12-31" value="${r ? esc(r.validiteFin) : ""}"/></div>
+    </div>
+    <div class="erreur" id="m-err"></div>
+    <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-bleu">Enregistrer</button></div>
+  </div>`);
+  modal(form);
+  form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
+  form.querySelector("#m-ok").onclick = () => {
+    const nom = form.querySelector("#m-nom").value.trim();
+    const deb = form.querySelector("#m-deb").value, fin = form.querySelector("#m-fin").value;
+    if (!nom) { form.querySelector("#m-err").textContent = "Nom obligatoire."; return; }
+    if (deb && fin && deb > fin) { form.querySelector("#m-err").textContent = "La fin de validité doit suivre le début."; return; }
+    if (fin && fin > "2099-12-31") { form.querySelector("#m-err").textContent = "La validité ne peut dépasser 2099."; return; }
+    // Règle d'unicité (Jules) : deux réseaux ne peuvent pas porter le même nom.
+    if (Noyau.nomUtilise(d.reseaux, nom, r ? r.id : null)) { form.querySelector("#m-err").textContent = "Un réseau porte déjà ce nom (le nom est un code unique)."; return; }
+    if (r) { r.nom = nom; r.validiteDebut = deb; r.validiteFin = fin; }
+    else d.reseaux.push({ id: Noyau.nouvelId(d), nom, validiteDebut: deb, validiteFin: fin });
+    BD.sauver(); form.closest(".modal-fond").remove(); rafraichir();
+  };
+}
+
+/* Formulaire contrat : nom + réseaux concernés. */
+function modalContrat(idContrat) {
+  const d = BD.donneesInstance(App.instanceOuverte.id);
+  const c = idContrat ? d.contrats.find(x => x.id === idContrat) : null;
+  const form = h(`<div>
+    <h2>${c ? "Modifier" : "Créer"} un contrat</h2>
+    <div class="champ"><label>Nom du contrat (32 car. max)</label><input id="m-nom" maxlength="32" value="${c ? esc(c.nom) : ""}"/></div>
+    <div class="champ"><label>Réseaux concernés</label>
+      <div class="inline-flex">${d.reseaux.map(r =>
+        `<label class="libelle"><input type="checkbox" value="${r.id}" ${c && (c.reseaux || []).includes(r.id) ? "checked" : ""}/> ${esc(r.nom)}</label>`).join("") || '<span class="info-txt">Créez d\'abord des réseaux.</span>'}</div></div>
+    <div class="erreur" id="m-err"></div>
+    <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-bleu">Enregistrer</button></div>
+  </div>`);
+  modal(form);
+  form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
+  form.querySelector("#m-ok").onclick = () => {
+    const nom = form.querySelector("#m-nom").value.trim();
+    if (!nom) { form.querySelector("#m-err").textContent = "Nom obligatoire."; return; }
+    // Règle d'unicité (Jules) : deux contrats ne peuvent pas porter le même nom.
+    if (Noyau.nomUtilise(d.contrats, nom, c ? c.id : null)) { form.querySelector("#m-err").textContent = "Un contrat porte déjà ce nom (le nom est un code unique)."; return; }
+    const reseaux = Array.from(form.querySelectorAll('input[type="checkbox"]:checked')).map(x => x.value);
+    if (c) { c.nom = nom; c.reseaux = reseaux; }
+    else d.contrats.push({ id: Noyau.nouvelId(d), nom, reseaux });
+    BD.sauver(); form.closest(".modal-fond").remove(); rafraichir();
+  };
+}
+
+/* ---------- Vue : catalogue de l'instance (classeur à onglets) ---------- */
+/* Chaque catégorie = un onglet du classeur. L'onglet affiche un TABLEAU :
+   - colonne « Label » (fond coloré selon l'origine, cf. légende),
+   - colonnes d'export remplies par l'utilisateur (codes des futurs exports),
+   - actions : modifier ✎ / supprimer ✕, plus « + Ajouter un label ».
+   Un onglet supplémentaire « Colonnes calculées » définit les compteurs
+   du tableau « Toutes les lignes ». */
+App.vueCat = "Activités";
+function vueCatalogue() {
+  const d = BD.donneesInstance(App.instanceOuverte.id);
+  const cats = [...Object.keys(d.catalogue), "Colonnes calculées"];
+  if (!App.vueCat || !cats.includes(App.vueCat)) App.vueCat = cats[0];
+  /* Disposition (reprise du prototype V2) : onglets de catégories VERTICAUX
+     à gauche, panneau de contenu à droite. Toutes les fonctionnalités V1
+     (codes d'export, colonnes renommables/supprimables, standards, légende)
+     sont conservées. */
+  const racine = h(`<div style="width:90%;margin:0 auto;">
+    <div class="catalogue-disposition">
+      <div class="menu-gauche"><div id="onglets-cat" style="display:grid;gap:6px;"></div></div>
+      <div class="panneau-catalogue">
+        <div>
+          <p class="info-txt" style="margin:0;">Listes de référence de l'instance, alignées sur les standards NeTEx / GTFS.
+            <button id="maj-ref" style="border:none;background:none;color:#64748b;text-decoration:underline;cursor:pointer;font-size:12px;padding:0;" title="Ajoute les valeurs des standards manquantes">🔄 Mettre à jour depuis les standards</button></p>
+          <p class="info-txt" style="margin:2px 0 0;"><b>Légende :</b> <span class="pastille std"></span> issu des standards (ou ajouté par la mise à jour) ·
+            <span class="pastille loc"></span> ajouté ou modifié par vous ·
+            <span class="etiquette alerte">⚠ n</span> valeurs à paramétrer (code d'export vide).</p>
+        </div>
+        <div id="contenu-cat" style="margin-top:12px;"></div>
+      </div>
+    </div>
+  </div>`);
+  const ongletsBox = racine.querySelector("#onglets-cat");
+  // Badge ⚠ : nombre de valeurs à paramétrer (ajoutées automatiquement ou
+  // par l'utilisateur, sans code d'export renseigné).
+  const aParametrer = (cat) => d.catalogue[cat]
+    ? d.catalogue[cat].labels.filter(l => l.origine === "local" && !(l.codes.export || "").trim()).length : 0;
+  cats.forEach(cat => {
+    const nb = cat === "Colonnes calculées" ? 0 : aParametrer(cat);
+    const b = h(`<button class="onglet ${App.vueCat === cat ? "actif" : ""}">${esc(cat)}${nb ? ` <span class="etiquette alerte">⚠ ${nb}</span>` : ""}</button>`);
+    b.onclick = () => { App.vueCat = cat; rafraichir(); };
+    ongletsBox.appendChild(b);
+  });
+  // Mise à jour : ajoute les valeurs du référentiel GTFS/NeTEx absentes
+  // du catalogue, marquées « standard » (bleu). Le référentiel est embarqué
+  // (les vocabulaires GTFS sont stables) et prêt à être enrichi par une API.
+  racine.querySelector("#maj-ref").onclick = () => {
+    const res = Noyau.majReferentiel(d);
+    BD.sauver(); rafraichir();
+    alert(res.ajoutes === 0
+      ? "Catalogue déjà à jour : aucune valeur des standards ne manque."
+      : `${res.ajoutes} label(s) ajouté(s) depuis les standards GTFS/NeTEx (en bleu).`);
+  };
+  const box = racine.querySelector("#contenu-cat");
+  if (App.vueCat === "Colonnes calculées") box.appendChild(vueColonnesCalculees(d));
+  else box.appendChild(vueOngletCatalogue(d, App.vueCat));
+  return racine;
+}
+
+/* Un onglet du classeur : le tableau des labels d'une catégorie. */
+function vueOngletCatalogue(d, categorie) {
+  const cat = d.catalogue[categorie];
+  const racine = h(`<div>
+    <div class="inline-flex" style="margin-bottom:10px;">
+      <button id="c-add" class="b-bleu">+ Ajouter un label</button>
+      <button id="c-col" class="b-bleu">+ Ajouter une colonne d'export</button>
+    </div>
+    <div class="enveloppe-table"><table>
+      <thead><tr><th>Label</th>${cat.colonnes.map((c, ci) => `<th data-ci="${ci}">${esc(c)} <button class="ico f-ren" title="Renommer cette colonne d'export">✎</button><button class="ico f-sup" title="Supprimer cette colonne d'export">✕</button></th>`).join("")}<th style="text-align:right;">Actions</th></tr></thead>
+      <tbody id="c-corps"></tbody>
+    </table></div>
+  </div>`);
+  // En-têtes des colonnes d'export : renommer (les codes suivent le nouveau
+  // nom) et supprimer — mais toujours en garder AU MOINS UNE.
+  racine.querySelectorAll("th[data-ci]").forEach(th => {
+    const ci = Number(th.dataset.ci);
+    th.querySelector(".f-ren").onclick = () => {
+      const ancien = cat.colonnes[ci];
+      const nv = (prompt("Nouveau nom de la colonne d'export :", ancien) || "").trim();
+      if (!nv || nv === ancien) return;
+      if (nv.length > 32) { alert("32 caractères maximum pour un nom de colonne."); return; }
+      if (cat.colonnes.includes(nv)) { alert("Ce nom de colonne existe déjà dans cet onglet."); return; }
+      cat.labels.forEach(l => { l.codes[nv] = l.codes[ancien]; delete l.codes[ancien]; });
+      cat.colonnes[ci] = nv;
+      BD.sauver(); rafraichir();
+    };
+    th.querySelector(".f-sup").onclick = () => {
+      if (cat.colonnes.length <= 1) { alert("Impossible : il doit rester au moins une colonne d'export dans cet onglet."); return; }
+      const nom = cat.colonnes[ci];
+      if (!confirm(`Supprimer la colonne « ${nom} » ? Les codes d'export qu'elle contient seront perdus.`)) return;
+      cat.labels.forEach(l => delete l.codes[nom]);
+      cat.colonnes.splice(ci, 1);
+      BD.sauver(); rafraichir();
+    };
+  });
+  const corps = racine.querySelector("#c-corps");
+  /* OPTIMISATION : le tableau est construit en UNE SEULE écriture innerHTML
+     et les événements sont DÉLÉGUÉS sur le tbody (1 écouteur « change » pour
+     les codes, 1 écouteur « click » pour les 3 boutons — au lieu de 3
+     boutons + n inputs PAR ligne). */
+  const dessiner = () => {
+    corps.innerHTML = cat.labels.map((lab, i) =>
+      `<tr><td class="cell-${lab.origine === "standard" ? "std" : "loc"}">${esc(lab.nom)}</td>`
+      + cat.colonnes.map(c => `<td><input data-code="${esc(c)}" data-i="${i}" maxlength="16" value="${esc(lab.codes[c] || "")}" style="padding:3px 6px;font-size:12px;" placeholder="code…"/></td>`).join("")
+      + `<td style="text-align:right;">
+          <button data-act="mod" data-i="${i}" title="Modifier le label">✎</button>
+          <button data-act="sup" data-i="${i}" title="Supprimer">✕</button>
+          <button data-act="use" data-i="${i}" title="Où est-il utilisé ?">🔎</button>
+        </td></tr>`
+    ).join("") + (!cat.labels.length
+      ? `<tr><td colspan="${cat.colonnes.length + 2}" style="text-align:center;color:#64748b;">Aucun label — ajoutez-en ou lancez la mise à jour des standards.</td></tr>`
+      : "");
+  };
+  // Codes d'export : saisie directe dans la cellule, enregistrée au
+  // change — avec règle d'unicité (deux labels d'une même catégorie ne
+  // peuvent pas porter le même code : il les identifiera à l'export).
+  corps.addEventListener("change", (e) => {
+    const inp = e.target.closest("input[data-code]");
+    if (!inp) return;
+    const i = Number(inp.dataset.i), lab = cat.labels[i];
+    const val = inp.value.trim();
+    const dejaPris = val && cat.labels.some((x, j) => j !== i &&
+      (x.codes[inp.dataset.code] || "").trim().toLowerCase() === val.toLowerCase());
+    if (dejaPris) {
+      alert("Ce code est déjà utilisé par un autre label de cette catégorie : chaque code doit être unique.");
+      inp.value = lab.codes[inp.dataset.code] || "";
+      return;
+    }
+    lab.codes[inp.dataset.code] = val; BD.sauver();
+  });
+  // Boutons d'action (délégation) : modifier / supprimer / utilisations.
+  corps.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-act]");
+    if (!b) return;
+    const i = Number(b.dataset.i), lab = cat.labels[i];
+    if (b.dataset.act === "mod") {
+      const nv = prompt("Modifier le label :", lab.nom);
+      if (nv !== null) { const r = Noyau.modifierLabel(d, categorie, i, nv); if (!r.ok) alert(r.erreur); else { BD.sauver(); dessiner(); } }
+    } else if (b.dataset.act === "sup") {
+      // Règle métier (Jules) : la suppression est refusée si le label est
+      // utilisé par au moins une ligne (le message indique lesquelles).
+      const r = Noyau.supprimerLabel(d, categorie, i);
+      if (!r.ok) { alert(r.erreur); return; }
+      BD.sauver(); dessiner();
+    } else if (b.dataset.act === "use") {
+      modalUsages(lab.nom, () =>
+        Noyau.usagesLabel(d, categorie, lab.nom).map(l => ({
+          label: () => `Ligne <b>${esc(l.abrev)}</b> — ${esc(l.nom)}`,
+          modifier: () => modalLigne(l.id),
+          supprimer: () => { d.lignes = d.lignes.filter(x => x.id !== l.id); }
+        })));
+    }
+  });
+  dessiner();
+  racine.querySelector("#c-add").onclick = () => {
+    const nv = prompt("Nouveau label (s'ajoute à la liste) :");
+    if (nv) { const r = Noyau.ajouterLabel(d, categorie, nv, "local"); if (!r.ok) alert(r.erreur); else { BD.sauver(); dessiner(); } }
+  };
+  racine.querySelector("#c-col").onclick = () => {
+    const nv = (prompt("Nom de la nouvelle colonne d'export :", "export") || "").trim();
+    if (!nv) return;
+    if (nv.length > 32) { alert("32 caractères maximum pour un nom de colonne."); return; }
+    if (cat.colonnes.includes(nv)) { alert("Cette colonne existe déjà."); return; }
+    cat.colonnes.push(nv);
+    BD.sauver(); rafraichir();
+  };
+  return racine;
+}
+
+/* Onglet « Colonnes calculées » : définit les compteurs disponibles
+   dans le menu ⚙ Colonnes du tableau « Toutes les lignes ». */
+const CIBLES = [["vehicules", "types de véhicule"], ["energies", "types d'énergie"], ["fonctions", "fonctions embarquées"]];
+function vueColonnesCalculees(d) {
+  const racine = h(`<div>
+    <p class="info-txt">Une colonne calculée compte, pour chaque ligne, le nombre d'éléments cochés dans une liste.
+      Elle apparaît ensuite dans le tableau « Toutes les lignes » via le menu ⚙ Colonnes.</p>
+    <div class="inline-flex" style="margin-bottom:10px;">
+      <button id="u-add" class="b-bleu">+ Ajouter une colonne calculée</button>
+    </div>
+    <div class="enveloppe-table"><table>
+      <thead><tr><th>Nom de la colonne</th><th>Compte</th><th style="text-align:right;">Actions</th></tr></thead>
+      <tbody id="u-corps"></tbody>
+    </table></div>
+  </div>`);
+  const corps = racine.querySelector("#u-corps");
+  const dessiner = () => {
+    corps.innerHTML = "";
+    (d.colonnesCalculees || []).forEach((c, i) => {
+      const cible = (CIBLES.find(x => x[0] === c.cible) || [c.cible, c.cible])[1];
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${esc(c.nom)}</td><td>Nombre de ${esc(cible)}</td><td style="text-align:right;"></td>`;
+      const actions = tr.lastElementChild;
+      actions.appendChild(boutonSupprimer("Supprimer", () => { d.colonnesCalculees.splice(i, 1); BD.sauver(); dessiner(); }));
+      corps.appendChild(tr);
+    });
+    if (!(d.colonnesCalculees || []).length) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td colspan="3" style="text-align:center;color:#64748b;">Aucune colonne calculée.</td>`;
+      corps.appendChild(tr);
+    }
+  };
+  dessiner();
+  racine.querySelector("#u-add").onclick = () => {
+    const form = h(`<div>
+      <h2>Nouvelle colonne calculée</h2>
+      <div class="champ"><label>Nom de la colonne</label><input id="m-nom" placeholder="ex. Nb véhicules"/></div>
+      <div class="champ"><label>Que compte-t-on ?</label>
+        <select id="m-cible">${CIBLES.map(([cle, txt]) => `<option value="${cle}">Nombre de ${txt}</option>`).join("")}</select></div>
+      <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-bleu">Créer</button></div>
+    </div>`);
+    modal(form);
+    form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
+    form.querySelector("#m-ok").onclick = () => {
+      const nom = form.querySelector("#m-nom").value.trim();
+      if (!nom) return;
+      d.colonnesCalculees.push({ nom, cible: form.querySelector("#m-cible").value });
+      BD.sauver(); form.closest(".modal-fond").remove(); rafraichir();
+    };
+  };
+  return racine;
+}
+
+/* ============ 4. TESTS : suite automatique sur le noyau ============ */
+/* Principe : on manipule un jeu de données fictif EN MÉMOIRE (jamais
+   sauvegardé) et on compare le résultat à ce qu'on attend. Un test
+   échoué = un message précis sur la régression. Relancez après chaque
+   modification de l'appli. */
+function lancerTests() {
+  const results = [];
+  const test = (nom, fn) => {
+    try { fn(); results.push({ nom, ok: true }); }
+    catch (e) { results.push({ nom, ok: false, msg: e.message }); }
+  };
+  const assert = (cond, msg) => { if (!cond) throw new Error(msg); };
+
+  test("Instance neuve contient les 6 catégories du catalogue", () => {
+    const d = Noyau.instanceNeuve();
+    assert(Object.keys(d.catalogue).length === 6, "6 catégories attendues");
+    assert(d.lignes.length === 0, "Aucune ligne au départ");
+    // Le catalogue est maintenant un classeur : labels avec origine + codes.
+    assert(d.catalogue["Activités"].labels[0].origine === "standard", "Les labels d'origine sont 'standard'");
+  });
+
+  test("Une ligne valide passe la validation", () => {
+    const d = Noyau.instanceNeuve();
+    d.reseaux.push({ id: "r1", nom: "STAR", validiteDebut: "2026-09-01", validiteFin: "2099-12-31" });
+    const errs = Noyau.validerLigne(d, { abrev: "A", nom: "Ligne A", reseauId: "r1", activite: "Urbaine", mode: "Autobus" }, null);
+    assert(errs.length === 0, "Aucune erreur attendue, reçues : " + errs.join(" "));
+  });
+
+  test("Une ligne sans activité ni mode est refusée", () => {
+    const d = Noyau.instanceNeuve();
+    d.reseaux.push({ id: "r1", nom: "STAR", validiteDebut: "", validiteFin: "" });
+    const errs = Noyau.validerLigne(d, { abrev: "A", nom: "Ligne A", reseauId: "r1", activite: "", mode: "" }, null);
+    assert(errs.some(e => e.includes("Activité")), "L'erreur 'Activité obligatoire' manque");
+    assert(errs.some(e => e.includes("Mode")), "L'erreur 'Mode obligatoire' manque");
+  });
+
+  test("Deux lignes ne peuvent pas avoir la même abréviation", () => {
+    const d = Noyau.instanceNeuve();
+    d.reseaux.push({ id: "r1", nom: "STAR", validiteDebut: "", validiteFin: "" });
+    assert(Noyau.validerLigne(d, { abrev: "A", nom: "Ligne A", reseauId: "r1", activite: "Urbaine", mode: "Autobus" }, null).length === 0,
+      "La première ligne devrait être valide");
+    d.lignes.push({ id: "l1", abrev: "A", nom: "Ligne A", reseauId: "r1", activite: "Urbaine", mode: "Autobus", vehicules: [], energies: [], fonctions: [] });
+    const errs2 = Noyau.validerLigne(d, { abrev: "a", nom: "Autre", reseauId: "r1", activite: "Urbaine", mode: "Autobus" }, null);
+    assert(errs2.some(e => e.includes("Abréviation")), "Le doublon d'abréviation (même casse) doit être détecté");
+  });
+
+  test("Catalogue : ajout, refus de doublon, modification, suppression", () => {
+    const d = Noyau.instanceNeuve();
+    assert(Noyau.ajouterLabel(d, "Activités", "Navette nocturne").ok, "L'ajout devrait réussir");
+    assert(!Noyau.ajouterLabel(d, "Activités", "urbaine").ok, "Un doublon (même casse) doit être refusé");
+    Noyau.modifierLabel(d, "Activités", 0, "Urbaine dense");
+    assert(d.catalogue["Activités"].labels[0].nom === "Urbaine dense", "Le label modifié doit remplacer l'ancien");
+    assert(d.catalogue["Activités"].labels[0].origine === "local", "Un label modifié devient 'local' (orange)");
+    const avant = d.catalogue["Modes de transport"].labels.length;
+    Noyau.supprimerLabel(d, "Modes de transport", 0);
+    assert(d.catalogue["Modes de transport"].labels.length === avant - 1, "La suppression doit retirer exactement 1 label");
+  });
+
+  test("Mise à jour standards : ajouts automatiques marqués 'standard', code GTFS pré-rempli, idempotente", () => {
+    const d = Noyau.instanceNeuve();
+    const r1 = Noyau.majReferentiel(d);
+    assert(r1.ajoutes > 0, "La 1re mise à jour doit ajouter des labels");
+    const metro = d.catalogue["Modes de transport"].labels.find(x => x.nom === "Métro");
+    assert(metro && metro.codes["export"] === "1", "Le Métro doit être ajouté avec le code GTFS '1'");
+    assert(metro.origine === "standard", "Un label ajouté automatiquement est 'standard' (bleu)");
+    const r2 = Noyau.majReferentiel(d);
+    assert(r2.ajoutes === 0, "Une 2e mise à jour ne doit rien ajouter (idempotence)");
+  });
+
+  test("Label utilisé : suppression refusée, renommage répercuté sur les lignes", () => {
+    const d = Noyau.instanceNeuve();
+    d.reseaux.push({ id: "r1", nom: "STAR", validiteDebut: "", validiteFin: "" });
+    d.lignes.push({ id: "l1", abrev: "A", nom: "Ligne A", reseauId: "r1", contratId: null, activite: "Urbaine", mode: "Autobus", groupe: "", vehicules: ["Minibus"], energies: [], fonctions: [] });
+    const idxAct = d.catalogue["Activités"].labels.findIndex(x => x.nom === "Urbaine");
+    // Suppression refusée : le label est utilisé par 1 ligne.
+    const r = Noyau.supprimerLabel(d, "Activités", idxAct);
+    assert(!r.ok && r.erreur.includes("1 ligne"), "La suppression d'un label utilisé doit être refusée en citant le nombre de lignes");
+    assert(Noyau.usagesLabel(d, "Types de véhicule", "Minibus").length === 1, "Le Minibus est utilisé par 1 ligne");
+    // Renommage : les lignes qui l'utilisaient suivent le changement.
+    Noyau.modifierLabel(d, "Activités", idxAct, "Urbaine dense");
+    assert(d.lignes[0].activite === "Urbaine dense", "Le renommage doit être répercuté sur la ligne");
+  });
+
+  test("Réseaux/contrats : noms uniques + usages comptés avant suppression", () => {
+    const d = Noyau.instanceNeuve();
+    d.reseaux.push({ id: "r1", nom: "STAR", validiteDebut: "", validiteFin: "" });
+    d.contrats.push({ id: "c1", nom: "Délégation", reseaux: ["r1"] });
+    d.lignes.push({ id: "l1", abrev: "A", nom: "Ligne A", reseauId: "r1", contratId: "c1", activite: "Urbaine", mode: "Autobus", groupe: "", vehicules: [], energies: [], fonctions: [] });
+    assert(Noyau.nomUtilise(d.reseaux, "star", null), "Un doublon de nom de réseau doit être détecté (même casse)");
+    assert(!Noyau.nomUtilise(d.contrats, "Autre contrat", null), "Un nom de contrat libre doit être accepté");
+    const u = Noyau.usagesReseau(d, "r1");
+    assert(u.lignes.length === 1 && u.contrats.length === 1, "Le réseau est utilisé par 1 ligne et 1 contrat");
+    assert(Noyau.usagesContrat(d, "c1").lignes.length === 1, "Le contrat est utilisé par 1 ligne");
+    d.lignes = []; d.contrats = [];
+    assert(Noyau.usagesReseau(d, "r1").lignes.length === 0 && Noyau.usagesReseau(d, "r1").contrats.length === 0, "Sans utilisations, la suppression redevient autorisée");
+  });
+
+  test("Codes d'export : doublons détectés dans une catégorie", () => {
+    const d = Noyau.instanceNeuve();
+    const modes = d.catalogue["Modes de transport"].labels;
+    modes[0].codes["export"] = "3";
+    modes.find(x => x.nom !== modes[0].nom).codes["export"] = "3"; // doublon volontaire
+    assert(Noyau.doublonsCodes(d, "Modes de transport", "export").includes("3"), "Le code en doublon doit être détecté");
+  });
+
+  /* ---- Tests de persistance (famille B) ----
+     Ils manipulent la VRAIE base locale : on sauvegarde son contenu au
+     départ, on travaille sur une base vierge, puis on restaure tout.
+     Comme ça, lancer les tests ne touche jamais aux vraies données. */
+  const isoler = (fn) => {
+    const backup = localStorage.getItem("hastus_libre_v1");
+    try { BD._raz(); localStorage.removeItem("hastus_libre_v1"); fn(); }
+    finally {
+      if (backup === null) localStorage.removeItem("hastus_libre_v1");
+      else localStorage.setItem("hastus_libre_v1", backup);
+      BD._raz(); // le prochain accès relira l'état restauré
+    }
+  };
+
+  test("Persistance : recharger la page ne perd rien (lignes, session)", () => isoler(() => {
+    const e = BD.lire();
+    e.utilisateurs.push({ id: "u1", nom: "Testeur", mdp: "YWJjZA==", admin: true });
+    e.session = "u1";
+    e.instances.push({ id: "i1", nom: "Essai", desc: "", proprio: "u1", membres: [] });
+    e.donnees["i1"] = Noyau.instanceNeuve();
+    e.donnees["i1"].lignes.push({ id: "o1", abrev: "A", nom: "Ligne A", reseauId: null, contratId: null, activite: "Urbaine", mode: "Autobus", groupe: "", vehicules: [], energies: [], fonctions: [] });
+    BD.sauver();
+    BD._raz(); // simule un rechargement complet de la page
+    const d2 = BD.donneesInstance("i1");
+    assert(!!d2 && d2.lignes.length === 1 && d2.lignes[0].abrev === "A", "La ligne doit survivre au rechargement");
+    assert(!!BD.utilisateurCourant() && BD.utilisateurCourant().nom === "Testeur", "La session doit être conservée");
+  }));
+
+  test("Duplication : la copie vit sa vie indépendamment (via la vraie BD)", () => isoler(() => {
+    const e = BD.lire();
+    e.utilisateurs.push({ id: "u1", nom: "T", mdp: "eA==", admin: true });
+    e.session = "u1";
+    e.instances.push({ id: "i1", nom: "Orig", desc: "", proprio: "u1", membres: [] });
+    e.donnees["i1"] = Noyau.instanceNeuve();
+    e.donnees["i1"].lignes.push({ id: "o1", abrev: "A", nom: "Ligne A", reseauId: null, contratId: null, activite: "Urbaine", mode: "Autobus", groupe: "", vehicules: [], energies: [], fonctions: [] });
+    BD.sauver();
+    const r = BD.dupliquerInstance("i1", "Copie", "");
+    assert(r.ok, "La duplication doit réussir : " + (r.erreur || ""));
+    const copie = e.instances.find(i => i.nom === "Copie");
+    BD.donneesInstance(copie.id).lignes[0].nom = "Modifié dans la copie";
+    assert(BD.donneesInstance("i1").lignes[0].nom === "Ligne A", "L'original ne doit jamais être modifié par la copie");
+  }));
+
+  test("Limites : 32/256 caractères appliquées côté données", () => isoler(() => {
+    const e = BD.lire();
+    e.utilisateurs.push({ id: "u1", nom: "T", mdp: "eA==", admin: true });
+    e.session = "u1";
+    BD.sauver();
+    const r = BD.creerInstance("N".repeat(100), "D".repeat(1000));
+    assert(r.ok, "La création doit réussir avec bornage automatique");
+    const inst = e.instances[0];
+    assert(inst.nom.length === 32, "Le nom doit être borné à 32 caractères, reçu " + inst.nom.length);
+    assert(inst.desc.length === 256, "La description doit être bornée à 256, reçu " + inst.desc.length);
+    BD.modifierInstance(inst.id, "N".repeat(100), "");
+    assert(e.instances.find(x => x.id === inst.id).nom.length === 32, "La modification doit aussi être bornée");
+  }));
+
+  test("Droits : un non-membre ne voit pas l'instance d'autrui", () => isoler(() => {
+    BD.inscrire("Chef", "abcd");   // 1er compte créé → administrateur
+    BD.creerInstance("Instance du Chef", "");
+    BD.inscrire("Invité", "abcd"); // 2e compte → simple membre, session active
+    assert(BD.mesInstances().length === 0, "L'invité ne doit voir aucune instance");
+    BD.affecterMembre(BD.lire().instances[0].id, BD.lire().utilisateurs.find(u => u.nom === "Invité").id);
+    assert(BD.mesInstances().length === 1, "Après affectation, l'invité doit voir l'instance");
+  }));
+
+  test("Import masse : valeur obligatoire inconnue créée automatiquement", () => {
+    const d = Noyau.instanceNeuve();
+    d.reseaux.push({ id: "r1", nom: "STAR", validiteDebut: "", validiteFin: "" });
+    const res = Noyau.appliquerColle(d, "Abrév\tNom\tRéseau\tContrat\tActivité\tMode\nZ\tNouvelle\tRÉSEAU NOUVEAU\t\tScolaire\tTéléphérique");
+    assert(res.crees === 1, "La ligne doit être créée");
+    const l = d.lignes.find(x => x.abrev === "Z");
+    assert(l && d.reseaux.some(r => r.nom === "RÉSEAU NOUVEAU" && r.id === l.reseauId), "Le réseau inconnu doit être créé et rattaché à la ligne");
+    assert((res.nouvellesValeurs["Modes de transport"] || []).includes("Téléphérique"), "Le mode inconnu doit être signalé comme nouvelle valeur");
+    assert(d.catalogue["Modes de transport"].labels.some(x => x.nom === "Téléphérique" && x.origine === "local"), "Le nouveau mode doit exister dans le catalogue, marqué 'local' (orange, à paramétrer)");
+  });
+
+  test("Import masse : doublon de nom commercial signalé comme suspect", () => {
+    const d = Noyau.instanceNeuve();
+    d.reseaux.push({ id: "r1", nom: "STAR", validiteDebut: "", validiteFin: "" });
+    d.lignes.push({ id: "l1", abrev: "A", nom: "Ligne A", reseauId: "r1", contratId: null, activite: "Urbaine", mode: "Autobus", groupe: "", vehicules: [], energies: [], fonctions: [] });
+    const res = Noyau.appliquerColle(d, "B	Ligne A	STAR			");
+    assert(res.crees === 1 && res.suspects.length === 1, "Une création portant un nom déjà utilisé doit être signalée suspecte");
+    assert(res.suspects[0].abrev === "B", "Le suspect signalé doit être la ligne B");
+  });
+
+  test("Identifiants : deux créations rapides restent distinctes (bug corrigé)", () => isoler(() => {
+    BD.inscrire("Alpha", "abcd");
+    BD.inscrire("Beta", "abcd");
+    const e = BD.lire();
+    assert(e.utilisateurs[0].id !== e.utilisateurs[1].id, "Deux utilisateurs créés à la suite doivent avoir des ids différents");
+    // Conséquence directe : Beta ne voit PAS l'instance d'Alpha.
+    BD.connecter("Alpha", "abcd");
+    BD.creerInstance("Chez Alpha", "");
+    BD.connecter("Beta", "abcd");
+    assert(BD.mesInstances().length === 0, "Beta ne doit voir aucune instance d'Alpha");
+  }));
+
+  test("Colonne calculée : elle compte ce qu'elle annonce", () => {
+    const d = Noyau.instanceNeuve();
+    d.colonnesCalculees.push({ nom: "Nb véhicules", cible: "vehicules" });
+    const l = { id: "o1", abrev: "A", nom: "Ligne A", vehicules: ["Bus standard 12 m", "Minibus"], energies: [], fonctions: [] };
+    assert(Noyau.valeurColCalculee(l, d.colonnesCalculees[0]) === 2, "La colonne doit compter 2 véhicules, reçu " + Noyau.valeurColCalculee(l, d.colonnesCalculees[0]));
+  });
+
+  test("Colle Excel : mise à jour, création, en-tête ignoré", () => {
+    const d = Noyau.instanceNeuve();
+    d.reseaux.push({ id: "r1", nom: "STAR", validiteDebut: "", validiteFin: "" });
+    d.contrats.push({ id: "c1", nom: "Délégation", reseaux: ["r1"] });
+    d.lignes.push({ id: "l1", abrev: "A", nom: "Ligne A", reseauId: "r1", contratId: null, activite: "Urbaine", mode: "Autobus", vehicules: [], energies: [], fonctions: [] });
+    const colle = "Abrév\tNom\tRéseau\tContrat\tActivité\tMode\nA\tLigne A modifiée\tSTAR\tDélégation\tUrbaine\tAutocar\nB\tNouvelle ligne\tSTAR\t\t\t";
+    const res = Noyau.appliquerColle(d, colle);
+    assert(res.maj === 1, "1 ligne devrait être mise à jour, reçu " + res.maj);
+    assert(res.crees === 1, "1 ligne devrait être créée, reçu " + res.crees);
+    assert(d.lignes.find(l => l.abrev === "A").nom === "Ligne A modifiée", "Le nom doit être mis à jour");
+    assert(d.lignes.find(l => l.abrev === "A").contratId === "c1", "Le contrat doit être relié par nom");
+    assert(!!d.lignes.find(l => l.abrev === "B"), "La nouvelle ligne B doit exister");
+  });
+
+  test("Export TSV : en-têtes et lignes alignés", () => {
+    const d = Noyau.instanceNeuve();
+    d.lignes.push({ id: "l1", abrev: "A", nom: "Ligne A", reseauId: null, activite: "Urbaine", mode: "Autobus", vehicules: [], energies: [], fonctions: [] });
+    const tsv = Noyau.exporterTSV(d, ["abrev", "nom"]);
+    const lignes = tsv.split("\n");
+    assert(lignes[0] === "abrev\tnom", "En-tête TSV incorrect : " + lignes[0]);
+    assert(lignes[1] === "A\tLigne A", "Ligne TSV incorrecte : " + lignes[1]);
+  });
+
+  test("Isolation : modifier une copie ne touche jamais l'original", () => {
+    const d1 = Noyau.instanceNeuve();
+    d1.lignes.push({ id: "l1", abrev: "A", nom: "Ligne A", reseauId: null, activite: "Urbaine", mode: "Autobus", vehicules: [], energies: [], fonctions: [] });
+    const d2 = JSON.parse(JSON.stringify(d1)); // copie profonde, comme la duplication réelle
+    d2.lignes[0].nom = "Modifié dans la copie";
+    assert(d1.lignes[0].nom === "Ligne A", "L'original ne doit jamais être modifié par la copie");
+  });
+
+  // Affichage du rapport de tests.
+  const ok = results.filter(r => r.ok).length;
+  const rapport = h(`<div>
+    <h2>🧪 Tests automatiques — ${ok}/${results.length} réussis</h2>
+    ${results.map(r => `<div class="carte" style="margin:6px 0;padding:8px 14px;">
+      <span class="${r.ok ? "tests-ok" : "tests-ko"}">${r.ok ? "✅" : "❌"} ${esc(r.nom)}</span>
+      ${r.msg ? `<div class="erreur">${esc(r.msg)}</div>` : ""}</div>`).join("")}
+    <p class="info-txt">Ces tests vérifient les règles métier du noyau. Relancez-les après chaque modification :
+    si un test échoue, la fonctionnalité correspondante a régressé.</p>
+    <div class="ligne-boutons"><button id="m-fermer" class="b-bleu">Fermer</button></div>
+  </div>`);
+  rapport.querySelector("#m-fermer").onclick = () => rapport.closest(".modal-fond").remove();
+  modal(rapport);
+}
+
+/* ============ Démarrage ============ */
+BD.charger();
+rafraichir();
+</script>
 </body>
 </html>
