@@ -105,6 +105,11 @@
   tr:hover td { background: rgba(18,102,229,0.03); }
   .enveloppe-table { border: 1px solid rgba(148,163,184,0.18); border-radius: 14px; overflow-x: auto; width: 100%; background: rgba(255,255,255,0.82); }
   .enveloppe-table table { min-width: 100%; }
+  /* Tableau du catalogue : défilement (vertical ET horizontal) quand il y a
+     beaucoup de colonnes, et largeur de colonne jamais inférieure au contenu. */
+  .tableau-refs { max-height: 62vh; overflow: auto; }
+  .tableau-refs td input { width: 100%; min-width: 140px; }
+  .tableau-refs td.cell-std, .tableau-refs td.cell-loc { white-space: nowrap; }
   td.cell-std { background: rgba(18,102,229,0.07); }
   td.cell-loc { background: var(--warning-soft); }
   th.th-oblig { background: linear-gradient(180deg, #ecfeff, #e0f7fa); color: #155e75; }
@@ -126,7 +131,7 @@
   .modal { background: rgba(255,255,255,0.97); border: 1px solid rgba(148,163,184,0.2); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; width: 100%; max-width: 560px; max-height: 88vh; overflow-y: auto; }
   .ligne-boutons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; flex-wrap: wrap; }
   /* ---- Suppression sensible (double clic en 3 s) ---- */
-  .suppr { position: relative; overflow: hidden; border: 1px solid var(--line-strong); background: var(--panel-strong); color: var(--muted); font-size: 12px; }
+  .suppr { position: relative; overflow: hidden; border: 1px solid rgba(239,68,68,0.45); background: var(--panel-strong); color: #b91c1c; font-weight: 700; font-size: 12px; }
   .suppr.armed { background: var(--danger); color: #fff; border-color: var(--danger); }
   .suppr .barre { position: absolute; left: 0; top: 0; bottom: 0; background: #b91c1c; width: 100%; }
   .suppr.armed .barre { animation: vide 3s linear forwards; }
@@ -801,7 +806,7 @@ function vueAccueil(u) {
     const act = carte.lastElementChild;
     const bOuvrir = h(`<button class="b-bleu">Ouvrir</button>`);
     bOuvrir.onclick = () => { App.instanceOuverte = inst; App.vue = "lignes"; App.colonnes = null; rafraichir(); };
-    const bDupl = h(`<button class="b-vert">Dupliquer</button>`);
+    const bDupl = h(`<button>Dupliquer</button>`);
     // Dupliquer : mêmes limites de sécurité que la création.
     bDupl.onclick = () => {
       const form = h(`<div>
@@ -810,7 +815,7 @@ function vueAccueil(u) {
         <div class="champ"><label>Nom</label><input id="m-nom" maxlength="32" value="${esc(inst.nom.slice(0, LIMITES.nomInstance - 8))} (copie)" /></div>
         <div class="champ"><label>Description</label><textarea id="m-desc" rows="2" maxlength="256">${esc(inst.desc)}</textarea></div>
         <div class="erreur" id="m-err"></div>
-        <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-vert">Dupliquer</button></div>
+        <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-bleu">Dupliquer</button></div>
       </div>`);
       modal(form);
       form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
@@ -1006,7 +1011,7 @@ function vueLignes() {
   const cols = cles.map(cle => cle === "__actions" ? act : dispo.find(c => c.cle === cle)).filter(Boolean);
   const lignesAffichees = trierEtFiltrer(d, dispo);
 
-  const racine = h(`<div style="width:90%;margin:0 auto;">
+  const racine = h(`<div>
     <div class="carte panneau-travail">
     <div class="barre-outils">
       <div class="titre">Tableau de gestion des lignes</div>
@@ -1014,7 +1019,6 @@ function vueLignes() {
         <span class="menu-col"><button id="b-col">⚙ Colonnes</button></span>
         <button id="b-copy">📋 Copier (Excel)</button>
         <button id="b-masse">📥 Importer</button>
-        <button id="b-nouv" class="b-bleu">+ Créer une ligne</button>
       </div>
     </div>
     <!-- Barre de filtres rapide (reprise du prototype V2, adaptée) :
@@ -1036,11 +1040,11 @@ function vueLignes() {
         <select id="fl-groupe"><option value="all">Tous</option>
           ${d.catalogue["Groupes de lignes"].labels.map(g => `<option value="${esc(g.nom)}" ${App.barre.groupe === g.nom ? "selected" : ""}>${esc(g.nom)}</option>`).join("")}</select></div>
     </div>
+    <!-- Bouton « Créer une ligne » placé au-dessus de la colonne ID unique
+         (remplace l'ancien texte d'aide). -->
     <div class="inline-flex" style="justify-content:space-between;width:100%;margin-bottom:10px;">
-      <span class="info-txt">Toutes les lignes de cette instance — double-clic pour modifier.</span>
-      <span class="inline-flex">
-        <button id="fl-raz" class="petit">Réinitialiser les filtres</button>
-      </span>
+      <button id="b-nouv" class="b-bleu">+ Créer une ligne</button>
+      <button id="fl-raz" class="petit">Réinitialiser les filtres</button>
     </div>
     <div class="enveloppe-table"><table>
       <thead><tr id="entetes"></tr></thead>
@@ -1082,7 +1086,7 @@ function vueLignes() {
       return;
     }
     const tri = App.tris.find(t => t.cle === col.cle);
-    th.innerHTML = `<span style="cursor:pointer;">${esc(col.label)}${col.calc ? ' <span class="etiquette">auto</span>' : ""}${tri ? (tri.asc ? " ▲" : " ▼") : ""}</span>${App.filtres[col.cle] ? ' <span class="etiquette f-badge" style="background:#fef9c3;cursor:pointer;" title="Cliquer pour retirer ce filtre">filtré ✕</span>' : ""} <button class="ico" title="Filtrer sur cette colonne">🔎</button>`;
+    th.innerHTML = `<span style="cursor:pointer;">${esc(col.label)}${col.calc ? ' <span class="etiquette">auto</span>' : ""}${tri ? (tri.asc ? " ▲" : " ▼") : ""}</span>${App.filtres[col.cle] ? ' <span class="etiquette f-badge" style="background:#fef9c3;cursor:pointer;" title="Cliquer pour retirer ce filtre">filtré ✕</span>' : ""}`;
     th.querySelector("span").onclick = () => {
       const t = App.tris.find(x => x.cle === col.cle);
       if (!t) App.tris.push({ cle: col.cle, asc: true });      // 1er clic : croissant
@@ -1093,41 +1097,6 @@ function vueLignes() {
     // Badge « filtré ✕ » : retire le filtre en UN clic.
     const badge = th.querySelector(".f-badge");
     if (badge) badge.onclick = (e) => { e.stopPropagation(); delete App.filtres[col.cle]; rafraichir(); };
-    th.querySelector(".ico").onclick = (e) => {
-      e.stopPropagation();
-      // Le filtre s'ouvre dans une POP-UP CENTRÉE (pas d'ancre sous l'entête :
-      // le champ était masqué par le tableau — demande de Jules). Police
-      // réduite pour limiter les problèmes d'affichage.
-      const f = App.filtres[col.cle] || { op: "contient", txt: "" };
-      const box = h(`<div style="max-width:380px;">
-        <h2 style="font-size:16px;">🔎 Filtre — ${esc(col.label)}</h2>
-        <div class="champ"><label style="font-size:12px;">Opérateur</label>
-          <select id="f-op" style="font-size:12px;">${FILTRES_OPS.map(o => `<option value="${o}" ${f.op === o ? "selected" : ""}>${o}</option>`).join("")}</select></div>
-        <div class="champ"><label style="font-size:12px;">Valeur</label>
-          <input id="f-txt" value="${esc(f.txt)}" placeholder="texte…" style="font-size:12px;"/></div>
-        <div class="ligne-boutons">
-          <button id="f-del" style="font-size:12px;">✕ Retirer le filtre</button>
-          <button id="f-ann" style="font-size:12px;">Annuler</button>
-          <button id="f-ok" class="b-bleu" style="font-size:12px;">OK</button>
-        </div></div>`);
-      modal(box);
-      const tOp = box.querySelector("#f-op"), tTxt = box.querySelector("#f-txt");
-      tOp.onchange = () => { tTxt.disabled = tOp.value === "est vide" || tOp.value === "n'est pas vide"; };
-      tOp.onchange();
-      tTxt.focus();
-      const fermer = () => box.closest(".modal-fond").remove();
-      const ok = () => {
-        const op = tOp.value, v = tTxt.value.trim();
-        if (op === "est vide" || op === "n'est pas vide") App.filtres[col.cle] = { op, txt: "" };
-        else if (v) App.filtres[col.cle] = { op, txt: v };
-        else delete App.filtres[col.cle];
-        fermer(); rafraichir();
-      };
-      box.querySelector("#f-ok").onclick = ok;
-      tTxt.onkeydown = (e) => { if (e.key === "Enter") ok(); };
-      box.querySelector("#f-ann").onclick = fermer;
-      box.querySelector("#f-del").onclick = () => { delete App.filtres[col.cle]; fermer(); rafraichir(); };
-    };
     entetes.appendChild(th);
   });
 
@@ -1560,10 +1529,10 @@ function modalLigne(idLigne) {
 function vueReseauxContrats() {
   const d = BD.donneesInstance(App.instanceOuverte.id);
   const racine = h(`<div style="width:90%;margin:0 auto;">
-    <div class="inline-flex" style="gap:12px;margin-bottom:12px;">
-      <span id="b-creer"></span>
+    <div class="inline-flex" style="justify-content:center;width:100%;margin-bottom:10px;">
       <span class="vue-switch" id="switch"></span>
     </div>
+    <div style="margin-bottom:12px;"><span id="b-creer"></span></div>
     <div id="liste"></div>
   </div>`);
   const sw = racine.querySelector("#switch");
@@ -1734,12 +1703,15 @@ function vueCatalogue() {
     <div class="catalogue-disposition">
       <div class="menu-gauche"><div id="onglets-cat" style="display:grid;gap:6px;"></div></div>
       <div class="panneau-catalogue">
+        <div class="inline-flex" style="justify-content:space-between;width:100%;align-items:flex-start;gap:12px;">
         <div>
           <p class="info-txt" style="margin:0;">Listes de référence de l'instance, alignées sur les standards NeTEx / GTFS.
             <button id="maj-ref" style="border:none;background:none;color:#64748b;text-decoration:underline;cursor:pointer;font-size:12px;padding:0;" title="Ajoute les valeurs des standards manquantes">🔄 Mettre à jour depuis les standards</button></p>
           <p class="info-txt" style="margin:2px 0 0;"><b>Légende :</b> <span class="pastille std"></span> issu des standards (ou ajouté par la mise à jour) ·
             <span class="pastille loc"></span> ajouté ou modifié par vous ·
             <span class="etiquette alerte">⚠ n</span> valeurs à paramétrer (code d'export vide).</p>
+        </div>
+        <button id="cat-save" class="b-vert" title="Enregistre et met à jour les panneaux d'avertissement">💾 Enregistrer</button>
         </div>
         <div id="contenu-cat" style="margin-top:12px;"></div>
       </div>
@@ -1766,6 +1738,9 @@ function vueCatalogue() {
       ? "Catalogue déjà à jour : aucune valeur des standards ne manque."
       : `${res.ajoutes} label(s) ajouté(s) depuis les standards GTFS/NeTEx (en bleu).`);
   };
+  // Bouton « Enregistrer » : force la sauvegarde puis rafraîchit l'écran,
+  // ce qui met à jour les panneaux d'avertissement (badges ⚠).
+  racine.querySelector("#cat-save").onclick = () => { BD.sauver(); rafraichir(); };
   const box = racine.querySelector("#contenu-cat");
   if (App.vueCat === "Colonnes calculées") box.appendChild(vueColonnesCalculees(d));
   else box.appendChild(vueOngletCatalogue(d, App.vueCat));
@@ -1778,9 +1753,9 @@ function vueOngletCatalogue(d, categorie) {
   const racine = h(`<div>
     <div class="inline-flex" style="margin-bottom:10px;">
       <button id="c-add" class="b-bleu">+ Ajouter un label</button>
-      <button id="c-col" class="b-bleu">+ Ajouter une colonne d'export</button>
+      <button id="c-col">+ Ajouter une colonne d'export</button>
     </div>
-    <div class="enveloppe-table"><table>
+    <div class="enveloppe-table tableau-refs"><table>
       <thead><tr><th>Label</th>${cat.colonnes.map((c, ci) => `<th data-ci="${ci}">${esc(c)} <button class="ico f-ren" title="Renommer cette colonne d'export">✎</button><button class="ico f-sup" title="Supprimer cette colonne d'export">✕</button></th>`).join("")}<th style="text-align:right;">Actions</th></tr></thead>
       <tbody id="c-corps"></tbody>
     </table></div>
