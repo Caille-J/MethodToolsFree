@@ -66,6 +66,13 @@
   td.cell-std { background: #e0f2fe; }
   td.cell-loc { background: #fef3c7; }
   th.th-oblig { background: #ecfeff; color: #155e75; }
+  /* Tableau des lignes : icônes d'action, sélection, entêtes tri/filtre. */
+  .ico { border: none; background: none; padding: 2px 4px; font-size: 14px; cursor: pointer; }
+  .ico:hover { color: #0284c7; }
+  tr.selectionnee td { background: #e0f2fe !important; }
+  /* Menu ⚙ Colonnes : mise en page uniforme (grille case | nom | flèches). */
+  .p-ligne { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 6px; padding: 4px 6px; font-size: 13px; }
+  .p-ligne .p-fleches { display: inline-flex; gap: 2px; }
 </style>
 </head>
 <body>
@@ -477,7 +484,8 @@ function h(html) { const d = document.createElement("div"); d.innerHTML = html.t
 function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
 /* État d'interface courant (quelle instance, quel onglet, quelles colonnes). */
-const App = { instanceOuverte: null, vue: "lignes", vueObjet: "reseaux", colonnes: null };
+const App = { instanceOuverte: null, vue: "lignes", vueObjet: "reseaux", colonnes: null,
+              tris: [], filtres: {}, selection: new Set(), actionsDebut: false, vueCat: "Activités" };
 
 /* ---------- Sécurité & diagnostic ----------
    Toute erreur JavaScript non capturée s'affiche dans un bandeau rouge en
@@ -771,7 +779,7 @@ function vueEspaceTravail(u) {
     <div class="bandeau" style="padding:6px 16px;">
       <div class="inline-flex" id="onglets"></div>
     </div>
-    <div class="conteneur" id="contenu"></div>
+    <div class="conteneur" id="contenu" ${App.vue === "lignes" ? 'style="max-width:none;"' : ""}></div>
   </div>`);
   racine.querySelector("#retour").onclick = () => { App.instanceOuverte = null; App.colonnes = null; rafraichir(); };
   const onglets = racine.querySelector("#onglets");
@@ -836,92 +844,172 @@ function valColonne(d, col, l) {
 function vueLignes() {
   const d = BD.donneesInstance(App.instanceOuverte.id);
   if (!App.colonnes) App.colonnes = colonnesAffichees();
-  // Ordre d'affichage = ordre choisi par l'utilisateur (menu ⚙ Colonnes),
-  // avec la colonne fixe « ID unique » toujours en tête.
   const dispo = colonnesDisponibles();
-  const cols = ["id", ...App.colonnes].map(cle => dispo.find(c => c.cle === cle)).filter(Boolean);
-  const racine = h(`<div>
-    <div class="inline-flex" style="justify-content:space-between;width:100%;margin-bottom:12px;">
-      <span class="info-txt">Toutes les lignes de cette instance.</span>
+  // Ordre d'affichage = ordre choisi par l'utilisateur (menu ⚙ Colonnes),
+  // ID unique fixe en tête, et colonne Actions positionnable début/fin.
+  const act = { cle: "__actions", label: "Actions" };
+  const cles = App.actionsDebut
+    ? ["__actions", "id", ...App.colonnes]
+    : ["id", ...App.colonnes, "__actions"];
+  const cols = cles.map(cle => cle === "__actions" ? act : dispo.find(c => c.cle === cle)).filter(Boolean);
+  const lignesAffichees = trierEtFiltrer(d, dispo);
+
+  const racine = h(`<div style="width:90%;margin:0 auto;">
+    <div class="inline-flex" style="justify-content:space-between;width:100%;margin-bottom:10px;">
+      <span class="info-txt">Toutes les lignes de cette instance. Clic : sélectionner — double-clic : modifier (une seule ligne à la fois).</span>
       <span class="inline-flex">
         <span class="menu-col"><button id="b-col">⚙ Colonnes</button></span>
         <button id="b-copy">📋 Copier (Excel)</button>
-        <button id="b-masse">✏️ Modifier en masse</button>
-        <button id="b-nouv" class="b-bleu">+ Créer une ligne</button>
+        <button id="b-masse">📥 Importer</button>
       </span>
     </div>
+    <div style="margin-bottom:10px;"><button id="b-nouv" class="b-bleu">+ Créer une ligne</button></div>
     <div class="enveloppe-table"><table>
-      <thead><tr>${cols.map(c => `<th>${c.label}${c.calc ? ' <span class="etiquette">auto</span>' : ""}</th>`).join("")}<th style="text-align:right;">Actions</th></tr></thead>
+      <thead><tr id="entetes"></tr></thead>
       <tbody id="corps"></tbody>
     </table></div>
     <p class="info-txt" id="compte" style="margin-top:8px;"></p>
   </div>`);
 
+  /* Entêtes de colonnes (demandes de Jules) :
+     - clic sur le titre : tri croissant → décroissant → retiré (cumulatif,
+       l'ordre de tri suit l'ordre des clics) ;
+     - bouton 🔎 : filtre « contient » sur la colonne (cumulatif, en ET). */
+  const entetes = racine.querySelector("#entetes");
+  cols.forEach(col => {
+    const th = document.createElement("th");
+    th.style.position = "relative";
+    if (col.cle === "__actions") {
+      th.innerHTML = "Actions";
+      th.style.textAlign = "right";
+      entetes.appendChild(th);
+      return;
+    }
+    const tri = App.tris.find(t => t.cle === col.cle);
+    th.innerHTML = `<span style="cursor:pointer;">${esc(col.label)}${col.calc ? ' <span class="etiquette">auto</span>' : ""}${tri ? (tri.asc ? " ▲" : " ▼") : ""}${App.filtres[col.cle] ? ' <span class="etiquette" style="background:#fef9c3;">filtré</span>' : ""}</span> <button class="ico" title="Filtrer sur cette colonne">🔎</button>`;
+    th.querySelector("span").onclick = () => {
+      const t = App.tris.find(x => x.cle === col.cle);
+      if (!t) App.tris.push({ cle: col.cle, asc: true });      // 1er clic : croissant
+      else if (t.asc) t.asc = false;                            // 2e : décroissant
+      else App.tris = App.tris.filter(x => x.cle !== col.cle); // 3e : retiré
+      rafraichir();
+    };
+    th.querySelector(".ico").onclick = () => {
+      const ancien = racine.querySelector(".panneau.filtre");
+      if (ancien) { ancien.remove(); return; }
+      const pan = h(`<div class="panneau filtre" style="left:0;right:auto;width:210px;">
+        <label style="font-size:12px;">Filtre « ${esc(col.label)} » (contient)</label>
+        <input id="f-txt" value="${esc(App.filtres[col.cle] || "")}" style="font-size:13px;"/>
+        <div class="ligne-boutons" style="margin:6px 0 0;">
+          <button id="f-del">Effacer</button><button id="f-ok" class="b-bleu">OK</button>
+        </div></div>`);
+      th.appendChild(pan);
+      pan.querySelector("#f-txt").focus();
+      const ok = () => {
+        const v = pan.querySelector("#f-txt").value.trim();
+        if (v) App.filtres[col.cle] = v; else delete App.filtres[col.cle];
+        rafraichir();
+      };
+      pan.querySelector("#f-ok").onclick = ok;
+      pan.querySelector("#f-txt").onkeydown = (e) => { if (e.key === "Enter") ok(); };
+      pan.querySelector("#f-del").onclick = () => { delete App.filtres[col.cle]; rafraichir(); };
+    };
+    entetes.appendChild(th);
+  });
+
+  /* Lignes du tableau : sélection au clic, modification au double-clic
+     (désactivée si plusieurs lignes sont sélectionnées — demande Jules). */
   const corps = racine.querySelector("#corps");
-  d.lignes.forEach(l => {
-    // PIÈGE HTML : un <tr> est ILLÉGAL dans une <div> — le navigateur le jette
-    // silencieusement, et h() renvoyait alors autre chose qu'une ligne de
-    // tableau (crash à l'affichage dès la 1re ligne : le bug du freeze).
-    // Solution : créer directement un <tr> authentique, puis remplir ses
-    // cellules — dans un vrai <tr>, les <td> sont parfaitement légaux.
+  const iAct = cols.findIndex(c => c.cle === "__actions");
+  lignesAffichees.forEach(l => {
     const tr = document.createElement("tr");
-    tr.innerHTML = cols.map(c => `<td>${esc(valColonne(d, c, l))}</td>`).join("")
-      + `<td style="text-align:right;"></td>`;
-    const actions = tr.lastElementChild;
-    const bMod = h(`<button>Modifier</button>`);
+    tr.dataset.id = l.id;
+    if (App.selection.has(l.id)) tr.classList.add("selectionnee");
+    tr.innerHTML = cols.map(col => col.cle === "__actions"
+      ? `<td style="text-align:right;"></td>`
+      : `<td>${esc(valColonne(d, col, l))}</td>`).join("");
+    // Colonne Actions : deux icônes. La suppression garde sa double
+    // confirmation (1er clic arme 3 s, 2e supprime).
+    const actions = tr.children[iAct];
+    const bMod = h(`<button class="ico" title="Modifier">✎</button>`);
     bMod.onclick = () => modalLigne(l.id);
     actions.appendChild(bMod);
-    actions.appendChild(boutonSupprimer("Supprimer", () => {
-      d.lignes = d.lignes.filter(x => x.id !== l.id); BD.sauver(); rafraichir();
+    actions.appendChild(boutonSupprimer("🗑", () => {
+      d.lignes = d.lignes.filter(x => x.id !== l.id);
+      App.selection.delete(l.id);
+      BD.sauver(); rafraichir();
     }));
+    tr.onclick = (e) => {
+      if (e.target.closest("button")) return;
+      if (App.selection.has(l.id)) App.selection.delete(l.id); else App.selection.add(l.id);
+      tr.classList.toggle("selectionnee");
+    };
+    tr.ondblclick = (e) => {
+      if (e.target.closest("button")) return;
+      if (App.selection.size > 1) return; // plusieurs sélectionnées : pas d'ouverture
+      modalLigne(l.id);
+    };
     corps.appendChild(tr);
   });
-  racine.querySelector("#compte").textContent = `${d.lignes.length} ligne(s)`;
+  racine.querySelector("#compte").textContent =
+    `${lignesAffichees.length} ligne(s) affichée(s) sur ${d.lignes.length}` +
+    (Object.keys(App.filtres).length || App.tris.length
+      ? ` — ${Object.keys(App.filtres).length} filtre(s), ${App.tris.length} tri(s) actifs` : "");
 
-  // Menu ⚙ Colonnes : cocher / décocher ET réordonner. Le panneau RESTE
-  // OUVERT tant qu'on n'a pas cliqué « Appliquer » : on peut sélectionner
-  // plusieurs colonnes d'affilée sans qu'il ne se referme à chaque clic.
-  // Mémorisé pour cette instance.
+  // Menu ⚙ Colonnes : mise en page UNIFORME (grille : case | nom | flèches),
+  // panneau persistant jusqu'à « Appliquer », réordonnancement ↑ ↓, et
+  // position de la colonne Actions (début ou fin de tableau uniquement).
   const bCol = racine.querySelector("#b-col");
   bCol.onclick = () => {
     const ancien = racine.querySelector(".panneau");
     if (ancien) { ancien.remove(); return; }
-    // Ordre de travail : colonnes sélectionnées (ordre actuel), puis les autres.
     let travail = [...App.colonnes];
-    dispo.forEach(c => { if (!c.fixe && !travail.includes(c.cle)) travail.push(c.cle); });
+    dispo.forEach(c => { if (!c.fixe && c.cle !== "__actions" && !travail.includes(c.cle)) travail.push(c.cle); });
     const cochees = new Set(App.colonnes);
-    const pan = h(`<div class="panneau" style="width:320px;">
+    const pan = h(`<div class="panneau" style="width:340px;">
       <b style="font-size:13px;">Colonnes affichées</b>
-      <p class="info-txt" style="margin:2px 0 6px;">↑ ↓ pour réordonner. « Appliquer » enregistre.</p>
+      <p class="info-txt" style="margin:2px 0 6px;">↑ ↓ réordonner · cocher/décocher · « Appliquer » enregistre.</p>
       <div id="p-liste" style="max-height:300px;overflow-y:auto;"></div>
+      <div style="margin-top:6px;border-top:1px solid #e2e8f0;padding-top:6px;">
+        <button id="p-actions" style="width:100%;font-size:12px;"></button>
+      </div>
       <div class="ligne-boutons" style="margin:6px 0 0;">
         <button id="p-ann">✕ Fermer</button>
         <button id="p-ok" class="b-bleu">Appliquer</button>
       </div>
     </div>`);
+    const majTxtActions = () => {
+      pan.querySelector("#p-actions").textContent =
+        `Colonne Actions : ${App.actionsDebut ? "au début" : "à la fin"} du tableau — cliquer pour changer`;
+    };
+    majTxtActions();
     const dessiner = () => {
       const box = pan.querySelector("#p-liste");
       box.innerHTML = "";
       travail.forEach((cle, i) => {
         const col = dispo.find(c => c.cle === cle);
-        const l = h(`<label style="justify-content:space-between;">
-          <span style="display:inline-flex;align-items:center;gap:6px;">
-            <input type="checkbox" ${cochees.has(cle) || col.fixe ? "checked" : ""} ${col.fixe ? "disabled" : ""}/>
-            ${esc(col.label)}${col.fixe ? ' <span class="etiquette">fixe</span>' : ""}</span>
-          <span><button title="Monter" ${i === 0 ? "disabled" : ""}>↑</button>
-          <button title="Descendre" ${i === travail.length - 1 ? "disabled" : ""}>↓</button></span></label>`);
+        const l = h(`<label class="p-ligne">
+          <input type="checkbox" ${cochees.has(cle) || col.fixe ? "checked" : ""} ${col.fixe ? "disabled" : ""}/>
+          <span>${esc(col.label)}${col.fixe ? ' <span class="etiquette">fixe</span>' : ""}</span>
+          <span class="p-fleches"><button title="Monter" ${i === 0 ? "disabled" : ""}>↑</button>
+          <button title="Descendre" ${i === travail.length - 1 ? "disabled" : ""}>↓</button></span>
+        </label>`);
         const cb = l.querySelector("input");
         cb.onchange = () => cb.checked ? cochees.add(cle) : cochees.delete(cle);
-        const [haut, bas] = l.querySelectorAll("button");
+        const [haut, bas] = l.querySelectorAll(".p-fleches button");
         haut.onclick = () => { travail.splice(i, 1); travail.splice(i - 1, 0, cle); dessiner(); };
         bas.onclick = () => { travail.splice(i, 1); travail.splice(i + 1, 0, cle); dessiner(); };
         box.appendChild(l);
       });
     };
     dessiner();
+    pan.querySelector("#p-actions").onclick = () => {
+      // La colonne Actions ne se place qu'en début ou en fin de tableau.
+      App.actionsDebut = !App.actionsDebut;
+      majTxtActions();
+    };
     pan.querySelector("#p-ann").onclick = () => pan.remove();
     pan.querySelector("#p-ok").onclick = () => {
-      // L'ordre du panneau devient l'ordre d'affichage (hors colonne fixe).
       App.colonnes = travail.filter(cle => cochees.has(cle));
       localStorage.setItem("hastus_colonnes_" + App.instanceOuverte.id, JSON.stringify(App.colonnes));
       rafraichir();
@@ -929,29 +1017,32 @@ function vueLignes() {
     bCol.parentElement.appendChild(pan);
   };
 
-  // Copier vers Excel (TSV) : seules les colonnes brutes sont exportées.
+  // Copier vers Excel (demande de Jules) : TOUTES les colonnes brutes sont
+  // copiées (même non affichées) ; les colonnes OBLIGATOIRES portent une *
+  // dans leur nom ; après la copie, une fenêtre rappelle lesquelles.
   racine.querySelector("#b-copy").onclick = () => {
-    const colsBase = cols.filter(c => !c.calc);
-    const tsv = colsBase.map(c => c.label).join("\t") + "\n" +
-      d.lignes.map(l => colsBase.map(c => valColonne(d, c, l)).join("\t")).join("\n");
-    navigator.clipboard?.writeText(tsv);
-    alert("Tableau copié ! Collez-le dans Excel (Ctrl+V).");
+    copierExcelVersPressePapiers(d);
+    const oblig = COLONNES_MASSE.filter(c => c.oblig).map(c => c.label).join(", ");
+    const info = h(`<div>
+      <h2>📋 Copié pour Excel</h2>
+      <p class="info-txt">Le tableau complet (toutes les colonnes) est dans le presse-papiers : collez-le dans Excel avec Ctrl+V.</p>
+      <p class="info-txt">Les colonnes dont le nom porte une <b>*</b> — <b>${esc(oblig)}</b> — sont <b>obligatoires</b> :
+      à l'import, une valeur manquante est refusée, et une valeur inconnue est créée automatiquement (badge ⚠ dans le catalogue).</p>
+      <div class="ligne-boutons"><button id="b-ok" class="b-bleu">Fermer</button></div>
+    </div>`);
+    info.querySelector("#b-ok").onclick = () => info.closest(".modal-fond").remove();
+    modal(info);
   };
 
-  // Modification en masse : fenêtre dédiée (cf. modalMasse).
-  racine.querySelector("#b-masse").onclick = () => modalMasse();
+  // Importer : fichier du PC (CSV/texte) ou collage, avec prévisualisation.
+  racine.querySelector("#b-masse").onclick = () => modalImporter();
 
   racine.querySelector("#b-nouv").onclick = () => modalLigne(null);
   return racine;
 }
 
-/* ---------- Modification en masse : fenêtre dédiée (demande de Jules) ----------
-   Contenu : le tableau des lignes EXISTANTES (colonnes obligatoires en
-   couleur + légende), un bouton d'export Excel de ce qui est visible, une
-   zone de collage depuis Excel, et une ANALYSE AVANT IMPORT : comptes des
-   nouveautés/modifications, valeurs inconnues qui seront créées (avec
-   badge ⚠ sur les onglets concernés du catalogue), et signal des lignes
-   a priori déjà existantes (même nom commercial) demandant validation. */
+/* Colonnes de l'import/export Excel (● = obligatoire). Sert aussi au
+   « Copier (Excel) » : tout est copié, * sur les obligatoires. */
 const COLONNES_MASSE = [
   { cle: "abrev", label: "Abrév.", oblig: true },
   { cle: "nom", label: "Nom commercial", oblig: true },
@@ -966,70 +1057,160 @@ function valMasse(d, l, cle) {
   if (cle === "contrat") { const c = d.contrats.find(x => x.id === l.contratId); return c ? c.nom : ""; }
   return l[cle] || "";
 }
-function modalMasse() {
+
+/* Trie et filtre les lignes selon l'état d'affichage. Cumulatif :
+   - filtres en ET (un par colonne, « contient », sans casse) ;
+   - tris enchaînés dans l'ordre des clics (1re colonne cliquée dominante). */
+function trierEtFiltrer(d, dispo) {
+  let liste = [...d.lignes];
+  Object.entries(App.filtres).forEach(([cle, txt]) => {
+    const col = dispo.find(c => c.cle === cle);
+    if (!col || !txt) return;
+    liste = liste.filter(l =>
+      String(valColonne(d, col, l)).toLowerCase().includes(String(txt).toLowerCase()));
+  });
+  const cmp = (a, b) => {
+    for (const t of App.tris) {
+      const col = dispo.find(c => c.cle === t.cle);
+      if (!col) continue;
+      const r = String(valColonne(d, col, a)).localeCompare(String(valColonne(d, col, b)), "fr", { numeric: true });
+      if (r !== 0) return t.asc ? r : -r;
+    }
+    return 0;
+  };
+  return liste.sort(cmp);
+}
+
+/* TSV complet (toutes les colonnes brutes), * sur les obligatoires.
+   Utilisé par « Copier (Excel) » et par la fenêtre d'import. */
+function copierExcelVersPressePapiers(d) {
+  const tsv = COLONNES_MASSE.map(c => c.label + (c.oblig ? "*" : "")).join("\t") + "\n" +
+    d.lignes.map(l => COLONNES_MASSE.map(c => valMasse(d, l, c.cle)).join("\t")).join("\n");
+  navigator.clipboard?.writeText(tsv);
+  return tsv;
+}
+
+/* ---------- Importer : fichier du PC ou collage (demande de Jules) ----------
+   Fenêtre large : lecture d'un fichier CSV/texte exporté d'Excel (les .xlsx
+   sont binaires : on demande un enregistrement en CSV), ou collage direct,
+   puis PRÉVISUALISATION du résultat avant import :
+   - vert = création, orange = cellule modifiée, rouge = suspect (même nom
+     commercial qu'une ligne existante), gris = ligne ignorée ;
+   - à la validation : compte des créations/modifications + valeurs inconnues
+     créées automatiquement (badge ⚠ dans le catalogue) ;
+   - les suspects demandent une confirmation explicite. */
+function modalImporter() {
   const d = BD.donneesInstance(App.instanceOuverte.id);
-  const form = h(`<div style="min-width:720px;">
-    <h2>Modification en masse</h2>
-    <p class="info-txt"><span class="etiquette" style="background:#ecfeff;border-color:#67e8f9;color:#155e75;">● colonne obligatoire</span>
-      Colonnes à coller depuis Excel : <b>${COLONNES_MASSE.map(c => c.label).join(" — ")}</b> (tabulations ou points-virgules).
+  const form = h(`<div style="min-width:900px;max-width:95vw;">
+    <h2>Importer des lignes</h2>
+    <p class="info-txt">Colonnes : <b>${COLONNES_MASSE.map(c => c.label + (c.oblig ? "*" : "")).join(" — ")}</b> (* = obligatoire).
       L'abréviation est la clé : existante → mise à jour, nouvelle → création.</p>
-    <div class="enveloppe-table" style="max-height:240px;overflow-y:auto;"><table>
-      <thead><tr>${COLONNES_MASSE.map(c => `<th class="${c.oblig ? "th-oblig" : ""}">${c.label}${c.oblig ? " ●" : ""}</th>`).join("")}</tr></thead>
-      <tbody id="m-existant"></tbody>
-    </table></div>
-    <div style="margin:8px 0;"><button id="m-export">📋 Exporter ce tableau vers Excel</button></div>
-    <div class="champ"><label>📥 Collez ici les lignes depuis Excel</label>
-      <textarea id="m-texte" rows="6" placeholder="Abrév → tabulation → Nom…"></textarea></div>
-    <div class="erreur" id="m-err" style="color:#b45309;"></div>
-    <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-bleu">Analyser puis importer</button></div>
+    <div class="champ"><label>📂 Fichier du PC (CSV ou texte exporté d'Excel)</label>
+      <input type="file" id="m-fichier" accept=".csv,.txt,.tsv"/></div>
+    <div class="champ"><label>…ou collez les lignes ici (depuis Excel : Ctrl+C puis Ctrl+V)</label>
+      <textarea id="m-texte" rows="4" placeholder="Abrév&#9;Nom&#9;…"></textarea></div>
+    <div class="inline-flex" style="justify-content:space-between;width:100%;">
+      <button id="m-export">📋 Exporter les lignes actuelles vers Excel</button>
+      <span class="ligne-boutons" style="margin:0;"><button id="m-ann">Annuler</button>
+      <button id="m-prev" class="b-bleu">Prévisualiser l'import</button></span>
+    </div>
   </div>`);
-  // Tableau des lignes existantes (ce qu'on voit = ce qu'on exporte).
-  const corps = form.querySelector("#m-existant");
-  d.lignes.forEach(l => {
+  form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
+  form.querySelector("#m-export").onclick = () => {
+    copierExcelVersPressePapiers(d);
+    alert("Lignes actuelles copiées ! Collez-les dans Excel (Ctrl+V).");
+  };
+  form.querySelector("#m-prev").onclick = () => {
+    const fichier = form.querySelector("#m-fichier").files[0];
+    if (fichier) {
+      if (/\.(xlsx|xls)$/i.test(fichier.name)) {
+        alert("Le format .xlsx est un fichier binaire : dans Excel, faites « Fichier → Enregistrer sous → CSV (séparateur point-virgule) », puis réessayez.");
+        return;
+      }
+      const lecteur = new FileReader();
+      lecteur.onload = () => preparer(String(lecteur.result));
+      lecteur.readAsText(fichier);
+    } else {
+      const texte = form.querySelector("#m-texte").value;
+      if (!texte.trim()) { alert("Choisissez un fichier ou collez des lignes."); return; }
+      preparer(texte);
+    }
+  };
+  // Analyse sur une COPIE des données : rien n'est modifié avant l'import
+  // confirmé. La prévisualisation s'appuie sur cette même copie.
+  function preparer(texte) {
+    const plan = Noyau.appliquerColle(JSON.parse(JSON.stringify(d)), texte);
+    modalApercu(texte, plan);
+  }
+  modal(form);
+}
+
+/* Prévisualisation de l'import : le tableau complet en largeur, chaque
+   ligne colorée selon son devenir. Import réel identique au plan analysé. */
+function modalApercu(texte, plan) {
+  const d = BD.donneesInstance(App.instanceOuverte.id);
+  const lignesFichier = texte.trim().split(/\r?\n/).filter(r => r.trim());
+  const form = h(`<div style="min-width:900px;max-width:95vw;">
+    <h2>Prévisualisation de l'import</h2>
+    <p class="info-txt"><b>Légende :</b>
+      <span class="etiquette" style="background:#dcfce7;border-color:#86efac;color:#166534;">création</span>
+      <span class="etiquette" style="background:#ffedd5;border-color:#fdba74;color:#9a3412;">cellule modifiée</span>
+      <span class="etiquette" style="background:#fef2f2;border-color:#fca5a5;color:#991b1b;">suspect : nom déjà utilisé</span>
+      <span class="etiquette" style="background:#f1f5f9;color:#64748b;">ignorée</span></p>
+    <div class="enveloppe-table" style="max-height:320px;overflow-y:auto;"><table>
+      <thead><tr>${COLONNES_MASSE.map(c => `<th class="${c.oblig ? "th-oblig" : ""}">${c.label}${c.oblig ? " ●" : ""}</th>`).join("")}<th>Statut</th></tr></thead>
+      <tbody id="a-corps"></tbody>
+    </table></div>
+    <p class="info-txt" id="a-resume"></p>
+    <div class="ligne-boutons"><button id="m-ann">Annuler</button><button id="m-ok" class="b-vert">Importer</button></div>
+  </div>`);
+  const corps = form.querySelector("#a-corps");
+  lignesFichier.forEach((row, idx) => {
+    const c = row.split(/\t|;/);
+    if (idx === 0 && /^abr/i.test((c[0] || "").trim())) return;
     const tr = document.createElement("tr");
-    tr.innerHTML = COLONNES_MASSE.map(c => `<td>${esc(valMasse(d, l, c.cle))}</td>`).join("");
+    const abrev = (c[0] || "").trim();
+    if (!abrev) {
+      tr.innerHTML = `<td colspan="${COLONNES_MASSE.length}" style="color:#64748b;">${esc(row)}</td><td><span class="etiquette" style="background:#f1f5f9;color:#64748b;">ignorée</span></td>`;
+      corps.appendChild(tr);
+      return;
+    }
+    const existante = d.lignes.find(l => l.abrev.toLowerCase() === abrev.toLowerCase());
+    const suspecte = !existante && plan.suspects.some(s => s.abrev === abrev);
+    let statut, cls;
+    if (existante) { statut = "modification"; cls = "background:#ffedd5;border-color:#fdba74;color:#9a3412;"; }
+    else if (suspecte) { statut = "⚠ suspect : nom déjà utilisé"; cls = "background:#fef2f2;border-color:#fca5a5;color:#991b1b;"; }
+    else { statut = "création"; cls = "background:#dcfce7;border-color:#86efac;color:#166534;"; }
+    // Cellules : orange si la valeur diffère de la ligne existante.
+    tr.innerHTML = COLONNES_MASSE.map((col, i) => {
+      const nouvelle = (c[i] || "").trim();
+      const actuelle = existante ? valMasse(d, existante, col.cle) : "";
+      const modifiee = existante && nouvelle && nouvelle !== actuelle;
+      return `<td class="${modifiee ? "cell-loc" : ""}">${esc(nouvelle)}</td>`;
+    }).join("") + `<td><span class="etiquette" style="${cls}">${statut}</span></td>`;
     corps.appendChild(tr);
   });
-  if (!d.lignes.length) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="${COLONNES_MASSE.length}" style="text-align:center;color:#64748b;">Aucune ligne pour l'instant.</td>`;
-    corps.appendChild(tr);
-  }
-  // Export de ce qu'on voit, au format TSV (collable directement dans Excel).
-  form.querySelector("#m-export").onclick = () => {
-    const tsv = COLONNES_MASSE.map(c => c.label).join("\t") + "\n" +
-      d.lignes.map(l => COLONNES_MASSE.map(c => valMasse(d, l, c.cle)).join("\t")).join("\n");
-    navigator.clipboard?.writeText(tsv);
-    alert("Tableau copié ! Collez-le dans Excel (Ctrl+V), modifiez-le, puis recollez-le ici.");
-  };
-  // Analyse sur une COPIE des données : rien n'est modifié avant validation.
-  // Une fois confirmé, l'import réel exécute exactement le plan analysé.
+  const nv = Object.entries(plan.nouvellesValeurs || {});
+  form.querySelector("#a-resume").innerHTML =
+    `<b>${plan.crees}</b> création(s), <b>${plan.maj}</b> modification(s), ${plan.ignorees} ignorée(s).` +
+    (nv.length ? ` Valeurs inconnues qui seront créées : ${nv.map(([k, vs]) => `<b>${esc(k)}</b> → ${vs.map(esc).join(", ")}`).join(" ; ")} (badge ⚠ dans le catalogue).` : "") +
+    (plan.suspects.length ? ` <b>⚠ ${plan.suspects.length} suspect(s)</b> : ${plan.suspects.map(s => esc(s.abrev)).join(", ")}.` : "");
   let confirme = false;
   form.querySelector("#m-ann").onclick = () => form.closest(".modal-fond").remove();
   form.querySelector("#m-ok").onclick = () => {
-    const texte = form.querySelector("#m-texte").value;
-    if (!texte.trim()) { form.querySelector("#m-err").textContent = "Collez d'abord des lignes."; return; }
-    const plan = Noyau.appliquerColle(JSON.parse(JSON.stringify(d)), texte);
-    let msg = `Analyse : ${plan.crees} nouvelle(s) ligne(s), ${plan.maj} mise(s) à jour, ${plan.ignorees} ignorée(s).`;
-    const nv = Object.entries(plan.nouvellesValeurs || {});
-    if (nv.length)
-      msg += ` Valeurs inconnues qui seront créées : ${nv.map(([k, vs]) => `${k} → ${vs.join(", ")}`).join(" ; ")} (badge ⚠ dans le catalogue).`;
-    // Suspects (même nom commercial) : validation explicite demandée.
     if (plan.suspects.length && !confirme) {
-      msg += ` ⚠ ${plan.suspects.length} ligne(s) a priori déjà existante(s) (même nom commercial) : ${plan.suspects.map(s => `${s.abrev} « ${s.nom} »`).join(", ")}. Cliquez à nouveau pour confirmer l'import malgré tout.`;
-      form.querySelector("#m-err").textContent = msg;
       confirme = true;
-      form.querySelector("#m-ok").textContent = "Confirmer l'import";
+      form.querySelector("#m-ok").textContent = "Confirmer malgré les suspects";
+      form.querySelector("#a-resume").innerHTML += " Relancez le bouton pour importer quand même.";
       return;
     }
-    // Exécution réelle sur les vraies données.
     const res = Noyau.appliquerColle(d, texte);
     BD.sauver();
-    alert(`Import terminé : ${res.crees} ligne(s) créée(s), ${res.maj} mise(s) à jour, ${res.ignorees} ignorée(s).` +
+    form.closest(".modal-fond").remove(); rafraichir();
+    alert(`Import terminé : ${res.crees} création(s), ${res.maj} modification(s), ${res.ignorees} ignorée(s).` +
       (Object.keys(res.nouvellesValeurs).length
         ? ` Nouvelles valeurs à paramétrer : ${Object.entries(res.nouvellesValeurs).map(([k, vs]) => `${k} (${vs.join(", ")})`).join(" ; ")}.`
         : ""));
-    form.closest(".modal-fond").remove(); rafraichir();
   };
   modal(form);
 }
