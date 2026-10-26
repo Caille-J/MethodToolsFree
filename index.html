@@ -6,25 +6,32 @@
   <title>HASTUS libre</title>
   <style>
     :root {
-      --bg: #f4f7fb;
+      --bg: #edf3fb;
+      --bg-strong: #e7eef9;
       --panel: rgba(255,255,255,0.9);
       --panel-strong: #ffffff;
-      --panel-soft: #eef5ff;
+      --panel-soft: #f3f8ff;
+      --panel-alt: #f5f7fb;
       --line: #dfe8f4;
-      --line-strong: #c4d4ee;
-      --text: #122033;
-      --muted: #5d6d84;
-      --primary: #0f6fff;
-      --primary-strong: #0a5ad8;
-      --secondary: #1cbda6;
+      --line-strong: #c7d7ee;
+      --text: #112236;
+      --muted: #586d86;
+      --primary: #1266e5;
+      --primary-strong: #0a4ab5;
+      --secondary: #1db4a6;
+      --secondary-strong: #108a7c;
       --warning: #f59e0b;
+      --warning-soft: #fff4de;
       --danger: #ef4444;
-      --success: #16a34a;
-      --shadow: 0 18px 45px rgba(15, 28, 56, 0.12);
+      --danger-soft: #fff1f2;
+      --success: #1ead67;
+      --success-soft: #ebfff5;
+      --shadow: 0 20px 46px rgba(15, 28, 56, 0.12);
       --shadow-soft: 0 8px 22px rgba(17, 38, 74, 0.08);
-      --radius: 18px;
+      --radius: 20px;
+      --radius-md: 16px;
       --radius-sm: 12px;
-      --radius-xs: 8px;
+      --radius-xs: 10px;
       --header-h: 76px;
     }
 
@@ -33,8 +40,8 @@
     body {
       font-family: Inter, "Segoe UI", sans-serif;
       background:
-        radial-gradient(circle at top left, rgba(15,111,255,0.15), transparent 26%),
-        radial-gradient(circle at bottom right, rgba(28,189,166,0.12), transparent 28%),
+        radial-gradient(circle at top left, rgba(18,102,229,0.15), transparent 25%),
+        radial-gradient(circle at bottom right, rgba(29,180,166,0.12), transparent 30%),
         var(--bg);
       color: var(--text);
     }
@@ -49,7 +56,8 @@
       padding: 10px 14px;
       cursor: pointer;
       transition: all 0.18s ease;
-      box-shadow: 0 1px 0 rgba(15,28,56,0.02);
+      box-shadow: 0 1px 0 rgba(15, 28, 56, 0.03);
+      font-weight: 600;
     }
     button:hover { transform: translateY(-1px); }
     button:active { transform: translateY(0); }
@@ -57,10 +65,10 @@
       background: linear-gradient(135deg, var(--primary), var(--primary-strong));
       border-color: var(--primary);
       color: #fff;
-      box-shadow: 0 12px 24px rgba(15,111,255,0.22);
+      box-shadow: 0 12px 24px rgba(18,102,229,0.22);
     }
     button.success {
-      background: linear-gradient(135deg, var(--secondary), #0ea57a);
+      background: linear-gradient(135deg, var(--secondary), var(--secondary-strong));
       border-color: var(--secondary);
       color: #fff;
     }
@@ -75,8 +83,15 @@
       color: #fff;
     }
     button.ghost { background: transparent; }
-    button.small { padding: 7px 10px; font-size: 12px; }
-    button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    button.small {
+      padding: 7px 10px;
+      font-size: 12px;
+    }
+    button:disabled {
+      opacity: 0.62;
+      cursor: not-allowed;
+      transform: none;
+    }
 
     .app-shell {
       min-height: 100vh;
@@ -102,7 +117,7 @@
       align-items: center;
       gap: 12px;
       font-weight: 800;
-      letter-spacing: 0.02em;
+      letter-spacing: 0.025em;
       color: var(--text);
     }
     .brand-mark {
@@ -111,7 +126,7 @@
       align-items: center;
       justify-content: center;
       border-radius: 12px;
-      background: linear-gradient(135deg, rgba(15,111,255,0.12), rgba(28,189,166,0.2));
+      background: linear-gradient(135deg, rgba(18,102,229,0.12), rgba(29,180,166,0.18));
       color: var(--primary);
       font-size: 1.2rem;
     }
@@ -123,11 +138,11 @@
     }
 
     .container {
-      width: min(1180px, calc(100% - 32px));
-      margin: 20px auto 40px;
+      width: min(1210px, calc(100% - 32px));
+      margin: 22px auto 40px;
     }
     .card {
-      background: rgba(255,255,255,0.82);
+      background: rgba(255,255,255,0.86);
       border: 1px solid rgba(148, 163, 184, 0.2);
       border-radius: var(--radius);
       box-shadow: var(--shadow-soft);
@@ -142,14 +157,14 @@
     .auth-card {
       width: min(460px, 100%);
       padding: 28px 24px;
-      background: rgba(255,255,255,0.9);
-      border: 1px solid rgba(208,220,236,0.8);
-      border-radius: 22px;
+      background: rgba(255,255,255,0.92);
+      border: 1px solid rgba(208,220,236,0.82);
+      border-radius: 24px;
       box-shadow: var(--shadow);
     }
     h1, h2, h3 { margin: 0 0 12px; }
-    h1 { font-size: clamp(1.8rem, 2.6vw, 2.4rem); }
-    h2 { font-size: 1.45rem; }
+    h1 { font-size: clamp(1.9rem, 2.8vw, 2.5rem); }
+    h2 { font-size: 1.5rem; }
     .subtitle {
       margin: 0 0 16px;
       color: var(--muted);
@@ -170,7 +185,7 @@
     input, select, textarea {
       width: 100%;
       border: 1px solid var(--line-strong);
-      background: rgba(248,250,252,0.9);
+      background: rgba(248,250,252,0.95);
       color: var(--text);
       border-radius: 12px;
       padding: 11px 12px;
@@ -178,11 +193,11 @@
       transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
     }
     input:focus, select:focus, textarea:focus {
-      border-color: rgba(15,111,255,0.7);
-      box-shadow: 0 0 0 4px rgba(15,111,255,0.12);
+      border-color: rgba(18,102,229,0.72);
+      box-shadow: 0 0 0 4px rgba(18,102,229,0.12);
       background: #fff;
     }
-    textarea { resize: vertical; min-height: 90px; }
+    textarea { resize: vertical; min-height: 92px; }
     .inline-actions {
       display: flex;
       justify-content: space-between;
@@ -213,12 +228,6 @@
       gap: 12px;
       flex-wrap: wrap;
     }
-    .badges {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
     .badge {
       display: inline-flex;
       align-items: center;
@@ -237,25 +246,31 @@
       border-color: rgba(245,158,11,0.25);
       color: #92400e;
     }
+    .badge.success {
+      background: var(--success-soft);
+      border-color: rgba(30,173,103,0.2);
+      color: #0d7d48;
+    }
 
     .instance-list {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       gap: 18px;
       margin-top: 18px;
     }
     .instance-card {
       padding: 18px 18px 14px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(244,249,255,0.9));
     }
     .instance-card h3 {
-      margin: 0 0 6px;
-      font-size: 1.15rem;
+      margin: 0 0 8px;
+      font-size: 1.18rem;
     }
     .instance-card p {
       margin: 0 0 14px;
       color: var(--muted);
-      line-height: 1.55;
-      min-height: 44px;
+      line-height: 1.6;
+      min-height: 48px;
     }
     .instance-meta {
       display: flex;
@@ -274,7 +289,7 @@
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
-      margin: 0 0 16px;
+      margin: 0 0 18px;
       padding: 8px;
       border-radius: 14px;
       background: rgba(148,163,184,0.08);
@@ -289,9 +304,14 @@
       padding: 10px 14px;
     }
     .tab.active {
-      background: linear-gradient(180deg, rgba(15,111,255,0.09), rgba(15,111,255,0.04));
-      border-color: rgba(15,111,255,0.18);
+      background: linear-gradient(180deg, rgba(18,102,229,0.09), rgba(18,102,229,0.04));
+      border-color: rgba(18,102,229,0.16);
       color: var(--primary-strong);
+    }
+
+    .transport-panel {
+      padding: 18px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(244,248,255,0.82));
     }
 
     .toolbar {
@@ -300,7 +320,12 @@
       justify-content: space-between;
       gap: 10px;
       flex-wrap: wrap;
-      margin-bottom: 12px;
+      margin-bottom: 16px;
+    }
+    .toolbar-title {
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: var(--text);
     }
     .toolbar-actions {
       display: flex;
@@ -309,65 +334,27 @@
       flex-wrap: wrap;
     }
 
-    .table-wrap {
-      overflow-x: auto;
-      width: 100%;
-      border: 1px solid rgba(148,163,184,0.18);
-      border-radius: 16px;
-      background: rgba(255,255,255,0.72);
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      min-width: 860px;
-    }
-    thead th {
-      background: rgba(231,239,249,0.9);
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      font-size: 0.72rem;
-      padding: 12px 12px;
-      text-align: left;
-      border-bottom: 1px solid rgba(148,163,184,0.22);
-      white-space: nowrap;
-    }
-    td {
-      padding: 12px;
-      border-bottom: 1px solid rgba(148,163,184,0.12);
-      vertical-align: middle;
-      color: var(--text);
-    }
-    tbody tr:hover {
-      background: rgba(15,111,255,0.03);
-    }
-    .row-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
     .summary-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
       gap: 16px;
       margin-bottom: 18px;
     }
     .stat {
       padding: 18px 18px 16px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(244,249,255,0.92));
     }
     .stat .label {
       display: block;
       margin-bottom: 8px;
       color: var(--muted);
       font-weight: 700;
-      font-size: 0.76rem;
+      font-size: 0.74rem;
       text-transform: uppercase;
       letter-spacing: 0.06em;
     }
     .stat .value {
-      font-size: clamp(1.7rem, 2vw, 2.2rem);
+      font-size: clamp(1.7rem, 2vw, 2.25rem);
       font-weight: 800;
       line-height: 1;
     }
@@ -376,6 +363,105 @@
       font-weight: 700;
       color: var(--muted);
       margin-left: 6px;
+    }
+
+    .filter-grid {
+      display: grid;
+      grid-template-columns: 1.8fr repeat(3, minmax(140px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+      padding: 14px;
+      border: 1px solid rgba(148,163,184,0.18);
+      border-radius: 14px;
+      background: rgba(245,249,255,0.9);
+    }
+    .filter-grid .field {
+      margin: 0;
+    }
+    .filter-grid label {
+      margin-bottom: 6px;
+      font-size: 0.72rem;
+    }
+    .filter-grid input, .filter-grid select {
+      min-height: 40px;
+      padding: 9px 10px;
+      font-size: 0.9rem;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      width: 100%;
+      border: 1px solid rgba(148,163,184,0.18);
+      border-radius: 16px;
+      background: rgba(255,255,255,0.82);
+    }
+    .table-wrap table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 980px;
+    }
+    thead th {
+      background: linear-gradient(180deg, rgba(230,238,250,0.98), rgba(225,234,246,0.96));
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-size: 0.72rem;
+      padding: 12px 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(148,163,184,0.2);
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    td {
+      padding: 12px;
+      border-bottom: 1px solid rgba(148,163,184,0.12);
+      vertical-align: middle;
+      color: var(--text);
+      background: rgba(255,255,255,0.5);
+    }
+    tbody tr:hover td {
+      background: rgba(18,102,229,0.025);
+    }
+    .row-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 28px;
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      border: 1px solid rgba(148,163,184,0.18);
+      background: var(--panel-soft);
+      color: var(--muted);
+    }
+    .status-chip.primary {
+      background: rgba(18,102,229,0.1);
+      color: var(--primary-strong);
+      border-color: rgba(18,102,229,0.18);
+    }
+    .status-chip.success {
+      background: var(--success-soft);
+      color: #0a7c4e;
+      border-color: rgba(30,173,103,0.2);
+    }
+    .status-chip.warning {
+      background: var(--warning-soft);
+      color: #9a5e00;
+      border-color: rgba(245,158,11,0.2);
+    }
+    .status-chip.danger {
+      background: var(--danger-soft);
+      color: #b42318;
+      border-color: rgba(239,68,68,0.2);
     }
 
     .catalogue-layout {
@@ -402,8 +488,8 @@
       font-weight: 700;
     }
     .side-item.active {
-      background: rgba(15,111,255,0.08);
-      border-color: rgba(15,111,255,0.14);
+      background: rgba(18,102,229,0.08);
+      border-color: rgba(18,102,229,0.14);
       color: var(--primary-strong);
     }
     .catalogue-panel {
@@ -430,7 +516,7 @@
       padding: 12px 12px;
       border-radius: 12px;
       border: 1px solid rgba(148,163,184,0.18);
-      background: rgba(248,250,252,0.8);
+      background: rgba(248,250,252,0.82);
     }
     .tag-card .meta {
       display: flex;
@@ -462,7 +548,7 @@
     .modal-backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(15, 23, 42, 0.52);
+      background: rgba(15, 23, 42, 0.54);
       display: grid;
       place-items: center;
       z-index: 100;
@@ -470,7 +556,7 @@
     }
     .modal {
       width: min(560px, 100%);
-      background: rgba(255,255,255,0.96);
+      background: rgba(255,255,255,0.97);
       border: 1px solid rgba(148,163,184,0.2);
       border-radius: 20px;
       box-shadow: var(--shadow);
@@ -489,16 +575,6 @@
       margin-bottom: 16px;
     }
     .muted { color: var(--muted); }
-    .tiny { font-size: 0.76rem; }
-    .subtle {
-      font-size: 0.8rem;
-      color: var(--muted);
-      background: rgba(148,163,184,0.08);
-      border: 1px solid rgba(148,163,184,0.12);
-      border-radius: 999px;
-      padding: 4px 8px;
-      font-weight: 700;
-    }
     .row { display: flex; gap: 12px; flex-wrap: wrap; }
     .row > * { flex: 1; min-width: 180px; }
     .stack { display: grid; gap: 12px; }
@@ -509,7 +585,6 @@
       flex-wrap: wrap;
       margin-top: 18px;
     }
-
     .empty-state {
       text-align: center;
       padding: 32px 16px;
@@ -518,7 +593,8 @@
     }
 
     @media (max-width: 760px) {
-      .catalogue-layout {
+      .catalogue-layout,
+      .filter-grid {
         grid-template-columns: 1fr;
       }
       .screen-header,
@@ -552,7 +628,15 @@
       instance: null,
       view: 'lines',
       catalogSection: 'Activités',
-      columns: ['abrev', 'nom', 'reseau', 'contrat', 'activite', 'mode', 'groupe']
+      columns: ['abrev', 'nom', 'reseau', 'contrat', 'activite', 'mode', 'groupe'],
+      tableFilters: {
+        query: '',
+        network: 'all',
+        activity: 'all',
+        mode: 'all',
+        sortBy: 'abrev',
+        sortDir: 'asc'
+      }
     };
 
     const storage = {
@@ -586,8 +670,26 @@
         contracts: [],
         lines: [],
         catalogue: {
-          'Activités': { labels: [{ nom: 'Urbaine', origin: 'standard', codes: {} }, { nom: 'Régulière (interurbaine)', origin: 'standard', codes: {} }, { nom: 'Scolaire', origin: 'standard', codes: {} }, { nom: 'À la demande', origin: 'standard', codes: {} }, { nom: 'Navette', origin: 'standard', codes: {} }], columns: ['export'] },
-          'Modes de transport': { labels: [{ nom: 'Tramway', origin: 'standard', codes: { export: '0' } }, { nom: 'Métro', origin: 'standard', codes: { export: '1' } }, { nom: 'Autobus', origin: 'standard', codes: { export: '3' } }, { nom: 'Autocar', origin: 'standard', codes: { export: '3' } }, { nom: 'Trolleybus', origin: 'standard', codes: { export: '11' } }], columns: ['export'] },
+          'Activités': {
+            labels: [
+              { nom: 'Urbaine', origin: 'standard', codes: {} },
+              { nom: 'Régulière (interurbaine)', origin: 'standard', codes: {} },
+              { nom: 'Scolaire', origin: 'standard', codes: {} },
+              { nom: 'À la demande', origin: 'standard', codes: {} },
+              { nom: 'Navette', origin: 'standard', codes: {} }
+            ],
+            columns: ['export']
+          },
+          'Modes de transport': {
+            labels: [
+              { nom: 'Tramway', origin: 'standard', codes: { export: '0' } },
+              { nom: 'Métro', origin: 'standard', codes: { export: '1' } },
+              { nom: 'Autobus', origin: 'standard', codes: { export: '3' } },
+              { nom: 'Autocar', origin: 'standard', codes: { export: '3' } },
+              { nom: 'Trolleybus', origin: 'standard', codes: { export: '11' } }
+            ],
+            columns: ['export']
+          },
           'Types de véhicule': { labels: [{ nom: 'Bus standard 12 m', origin: 'standard', codes: {} }, { nom: 'Bus articulé 18 m', origin: 'standard', codes: {} }, { nom: 'Car 13 m', origin: 'standard', codes: {} }, { nom: 'Minibus', origin: 'standard', codes: {} }], columns: ['export'] },
           'Types d\'énergie': { labels: [{ nom: 'Gasoil', origin: 'standard', codes: {} }, { nom: 'HVO', origin: 'standard', codes: {} }, { nom: 'Électrique', origin: 'standard', codes: {} }, { nom: 'GNV', origin: 'standard', codes: {} }, { nom: 'Hybride', origin: 'standard', codes: {} }], columns: ['export'] },
           'Fonctions embarquées': { labels: [{ nom: 'Wi-Fi', origin: 'standard', codes: {} }, { nom: 'PMR', origin: 'standard', codes: {} }, { nom: 'Emport vélo', origin: 'standard', codes: {} }, { nom: 'Prise USB', origin: 'standard', codes: {} }, { nom: 'Écran info voyageurs', origin: 'standard', codes: {} }], columns: ['export'] },
@@ -600,10 +702,6 @@
 
     function getStore() {
       return storage.load();
-    }
-
-    function setCurrentUser(user) {
-      state.currentUser = user;
     }
 
     function currentUser() {
@@ -625,6 +723,10 @@
       const user = currentUser();
       if (!user) return [];
       return data.instances.filter(inst => user.admin || inst.ownerId === user.id || (inst.members || []).includes(user.id));
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]));
     }
 
     function render() {
@@ -662,7 +764,7 @@
           <main class="auth-wrap">
             <section class="auth-card">
               <h1>Connexion</h1>
-              <p class="subtitle">Accédez à vos instances de travail et gérez vos lignes, réseaux et catalogues.</p>
+              <p class="subtitle">Accédez à vos instances de travail et gérez vos lignes, réseaux, contrats et catalogues.</p>
               <div class="field">
                 <label for="username">Nom d'utilisateur</label>
                 <input id="username" autocomplete="username" />
@@ -737,9 +839,7 @@
     }
 
     function renderDashboard(user) {
-      const store = getStore();
       const instances = getVisibleInstances();
-
       const cards = instances.map(inst => {
         const data = getInstanceData(inst.id);
         return `
@@ -802,8 +902,7 @@
 
       document.getElementById('newInstanceBtn').addEventListener('click', () => openInstanceModal('create'));
       document.getElementById('testsBtn').addEventListener('click', () => {
-        const result = runCoreTests();
-        alert(result);
+        alert(runCoreTests());
       });
 
       document.querySelectorAll('.open-instance').forEach(btn => {
@@ -819,24 +918,17 @@
       });
 
       document.querySelectorAll('.duplicate-instance').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const id = btn.dataset.id;
-          duplicateInstanceModal(id);
-        });
+        btn.addEventListener('click', () => duplicateInstanceModal(btn.dataset.id));
       });
 
       document.querySelectorAll('.edit-instance').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const id = btn.dataset.id;
-          editInstanceModal(id);
-        });
+        btn.addEventListener('click', () => editInstanceModal(btn.dataset.id));
       });
 
       document.querySelectorAll('.delete-instance').forEach(btn => {
         btn.addEventListener('click', () => {
           const id = btn.dataset.id;
-          const confirmed = confirm('Supprimer cette instance ?');
-          if (!confirmed) return;
+          if (!confirm('Supprimer cette instance ?')) return;
           const store = getStore();
           store.instances = store.instances.filter(inst => inst.id !== id);
           delete store.data[id];
@@ -898,15 +990,9 @@
         });
       });
 
-      if (state.view === 'lines') {
-        bindLinesView();
-      }
-      if (state.view === 'networks') {
-        bindNetworksView();
-      }
-      if (state.view === 'catalogue') {
-        bindCatalogueView();
-      }
+      if (state.view === 'lines') bindLinesView();
+      if (state.view === 'networks') bindNetworksView();
+      if (state.view === 'catalogue') bindCatalogueView();
     }
 
     function renderLinesView(data, inst) {
@@ -916,6 +1002,8 @@
         contracts: data.contracts.length,
         tags: Object.values(data.catalogue).reduce((sum, cat) => sum + cat.labels.length, 0)
       };
+
+      const filteredLines = getFilteredLines(data);
 
       return `
         <section class="summary-grid">
@@ -937,32 +1025,69 @@
           </div>
         </section>
 
-        <div class="card" style="padding:18px;">
+        <div class="card transport-panel">
           <div class="toolbar">
-            <div class="muted">Toutes les lignes de cette instance</div>
+            <div class="toolbar-title">Tableau de gestion des lignes</div>
             <div class="toolbar-actions">
               <button id="copyRowsBtn">📋 Copier Excel</button>
               <button id="importRowsBtn">📥 Importer</button>
               <button id="addLineBtn" class="primary">+ Nouvelle ligne</button>
             </div>
           </div>
+
+          <div class="filter-grid">
+            <div class="field">
+              <label>Recherche</label>
+              <input id="lineSearch" value="${escapeHtml(state.tableFilters.query)}" placeholder="Abréviation, nom, réseau…" />
+            </div>
+            <div class="field">
+              <label>Réseau</label>
+              <select id="lineFilterNetwork">
+                <option value="all">Tous</option>
+                ${data.networks.map(net => `<option value="${net.id}" ${state.tableFilters.network === net.id ? 'selected' : ''}>${escapeHtml(net.name)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="field">
+              <label>Activité</label>
+              <select id="lineFilterActivity">
+                <option value="all">Toutes</option>
+                ${getCatalogueOptions(data, 'Activités').map(opt => `<option value="${escapeHtml(opt.nom)}" ${state.tableFilters.activity === opt.nom ? 'selected' : ''}>${escapeHtml(opt.nom)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="field">
+              <label>Mode</label>
+              <select id="lineFilterMode">
+                <option value="all">Tous</option>
+                ${getCatalogueOptions(data, 'Modes de transport').map(opt => `<option value="${escapeHtml(opt.nom)}" ${state.tableFilters.mode === opt.nom ? 'selected' : ''}>${escapeHtml(opt.nom)}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+
+          <div class="toolbar" style="margin-bottom:10px;">
+            <div class="muted">${filteredLines.length} ligne(s) affichée(s)</div>
+            <div class="toolbar-actions">
+              <button class="small" id="resetFiltersBtn">Réinitialiser</button>
+              <button class="small" id="toggleSortBtn">Tri: ${state.tableFilters.sortDir === 'asc' ? 'A → Z' : 'Z → A'}</button>
+            </div>
+          </div>
+
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>Abrév.</th>
-                  <th>Nom</th>
+                  <th><button class="ghost small sort-col" data-sort="abrev">Abrév.</button></th>
+                  <th><button class="ghost small sort-col" data-sort="nom">Nom</button></th>
                   <th>Réseau</th>
                   <th>Contrat</th>
                   <th>Activité</th>
                   <th>Mode</th>
                   <th>Groupe</th>
+                  <th>Statut</th>
                   <th style="text-align:right;">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                ${renderLinesTableRows(data)}
+                ${renderLinesTableRows(filteredLines, data)}
               </tbody>
             </table>
           </div>
@@ -972,6 +1097,7 @@
 
     function bindLinesView() {
       document.getElementById('addLineBtn').addEventListener('click', () => openLineModal());
+
       document.getElementById('copyRowsBtn').addEventListener('click', () => {
         const data = getInstanceData(state.instance.id);
         const rows = [
@@ -1002,6 +1128,58 @@
         render();
       });
 
+      const searchInput = document.getElementById('lineSearch');
+      const networkSelect = document.getElementById('lineFilterNetwork');
+      const activitySelect = document.getElementById('lineFilterActivity');
+      const modeSelect = document.getElementById('lineFilterMode');
+
+      searchInput.addEventListener('input', () => {
+        state.tableFilters.query = searchInput.value;
+        render();
+      });
+      networkSelect.addEventListener('change', () => {
+        state.tableFilters.network = networkSelect.value;
+        render();
+      });
+      activitySelect.addEventListener('change', () => {
+        state.tableFilters.activity = activitySelect.value;
+        render();
+      });
+      modeSelect.addEventListener('change', () => {
+        state.tableFilters.mode = modeSelect.value;
+        render();
+      });
+
+      document.getElementById('resetFiltersBtn').addEventListener('click', () => {
+        state.tableFilters = {
+          query: '',
+          network: 'all',
+          activity: 'all',
+          mode: 'all',
+          sortBy: 'abrev',
+          sortDir: 'asc'
+        };
+        render();
+      });
+
+      document.getElementById('toggleSortBtn').addEventListener('click', () => {
+        state.tableFilters.sortDir = state.tableFilters.sortDir === 'asc' ? 'desc' : 'asc';
+        render();
+      });
+
+      document.querySelectorAll('.sort-col').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const sortBy = btn.dataset.sort;
+          if (state.tableFilters.sortBy === sortBy) {
+            state.tableFilters.sortDir = state.tableFilters.sortDir === 'asc' ? 'desc' : 'asc';
+          } else {
+            state.tableFilters.sortBy = sortBy;
+            state.tableFilters.sortDir = 'asc';
+          }
+          render();
+        });
+      });
+
       document.querySelectorAll('.edit-line').forEach(btn => {
         btn.addEventListener('click', () => openLineModal(btn.dataset.id));
       });
@@ -1019,11 +1197,65 @@
       });
     }
 
+    function getFilteredLines(data) {
+      const query = (state.tableFilters.query || '').trim().toLowerCase();
+      let rows = data.lines.filter(line => {
+        const networkName = findNetworkName(data, line.reseauId).toLowerCase();
+        const text = `${line.abrev || ''} ${line.nom || ''} ${networkName} ${line.activite || ''} ${line.mode || ''}`.toLowerCase();
+        const matchesQuery = !query || text.includes(query);
+        const matchesNetwork = state.tableFilters.network === 'all' || line.reseauId === state.tableFilters.network;
+        const matchesActivity = state.tableFilters.activity === 'all' || line.activite === state.tableFilters.activity;
+        const matchesMode = state.tableFilters.mode === 'all' || line.mode === state.tableFilters.mode;
+        return matchesQuery && matchesNetwork && matchesActivity && matchesMode;
+      });
+
+      rows.sort((a, b) => {
+        const dir = state.tableFilters.sortDir === 'asc' ? 1 : -1;
+        const aValue = String(a[state.tableFilters.sortBy] ?? '').toLowerCase();
+        const bValue = String(b[state.tableFilters.sortBy] ?? '').toLowerCase();
+        return aValue.localeCompare(bValue, undefined, { numeric: true }) * dir;
+      });
+
+      return rows;
+    }
+
+    function renderLinesTableRows(lines, data) {
+      if (!lines.length) {
+        return `<tr><td colspan="9"><div class="empty-state">Aucune ligne ne correspond aux filtres.</div></td></tr>`;
+      }
+
+      return lines.map(line => {
+        const networkName = findNetworkName(data, line.reseauId);
+        const contractName = findContractName(data, line.contratId);
+        const statusClass = line.activite && line.mode ? 'success' : 'warning';
+        const statusLabel = line.activite && line.mode ? 'Valide' : 'À compléter';
+
+        return `
+          <tr>
+            <td><strong>${escapeHtml(line.abrev || '')}</strong></td>
+            <td>${escapeHtml(line.nom || '')}</td>
+            <td>${escapeHtml(networkName)}</td>
+            <td>${escapeHtml(contractName)}</td>
+            <td>${escapeHtml(line.activite || '')}</td>
+            <td>${escapeHtml(line.mode || '')}</td>
+            <td>${escapeHtml(line.groupe || '')}</td>
+            <td><span class="status-chip ${statusClass}">${statusLabel}</span></td>
+            <td>
+              <div class="row-actions">
+                <button class="small edit-line" data-id="${line.id}">Modifier</button>
+                <button class="small danger delete-line" data-id="${line.id}">Supprimer</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
     function renderNetworksView(data, inst) {
       return `
-        <div class="card" style="padding:18px;">
+        <div class="card transport-panel">
           <div class="toolbar">
-            <div class="muted">Réseaux et contrats</div>
+            <div class="toolbar-title">Réseaux et contrats</div>
             <div class="toolbar-actions">
               <button id="addNetworkBtn" class="primary">+ Nouveau réseau</button>
               <button id="addContractBtn">+ Nouveau contrat</button>
@@ -1092,6 +1324,44 @@
           render();
         });
       });
+    }
+
+    function renderNetworksList(data) {
+      if (!data.networks.length) return '<div class="empty-state">Aucun réseau.</div>';
+      return `
+        <div class="stack">
+          ${data.networks.map(net => `
+            <div class="tag-card">
+              <div class="meta">
+                <span class="tag-name">${escapeHtml(net.name)}</span>
+              </div>
+              <div class="tag-actions">
+                <button class="small edit-network" data-id="${net.id}">Modifier</button>
+                <button class="small danger delete-network" data-id="${net.id}">Supprimer</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    function renderContractsList(data) {
+      if (!data.contracts.length) return '<div class="empty-state">Aucun contrat.</div>';
+      return `
+        <div class="stack">
+          ${data.contracts.map(contract => `
+            <div class="tag-card">
+              <div class="meta">
+                <span class="tag-name">${escapeHtml(contract.name)}</span>
+              </div>
+              <div class="tag-actions">
+                <button class="small edit-contract" data-id="${contract.id}">Modifier</button>
+                <button class="small danger delete-contract" data-id="${contract.id}">Supprimer</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
     }
 
     function renderCatalogueView(data, inst) {
@@ -1173,69 +1443,6 @@
           render();
         });
       });
-    }
-
-    function renderLinesTableRows(data) {
-      if (!data.lines.length) {
-        return `<tr><td colspan="9"><div class="empty-state">Aucune ligne pour le moment.</div></td></tr>`;
-      }
-
-      return data.lines.map(line => `
-        <tr>
-          <td>${escapeHtml(line.id)}</td>
-          <td>${escapeHtml(line.abrev || '')}</td>
-          <td>${escapeHtml(line.nom || '')}</td>
-          <td>${escapeHtml(findNetworkName(data, line.reseauId))}</td>
-          <td>${escapeHtml(findContractName(data, line.contratId))}</td>
-          <td>${escapeHtml(line.activite || '')}</td>
-          <td>${escapeHtml(line.mode || '')}</td>
-          <td>${escapeHtml(line.groupe || '')}</td>
-          <td>
-            <div class="row-actions">
-              <button class="small edit-line" data-id="${line.id}">Modifier</button>
-              <button class="small danger delete-line" data-id="${line.id}">Supprimer</button>
-            </div>
-          </td>
-        </tr>
-      `).join('');
-    }
-
-    function renderNetworksList(data) {
-      if (!data.networks.length) return '<div class="empty-state">Aucun réseau.</div>';
-      return `
-        <div class="stack">
-          ${data.networks.map(net => `
-            <div class="tag-card">
-              <div class="meta">
-                <span class="tag-name">${escapeHtml(net.name)}</span>
-              </div>
-              <div class="tag-actions">
-                <button class="small edit-network" data-id="${net.id}">Modifier</button>
-                <button class="small danger delete-network" data-id="${net.id}">Supprimer</button>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      `;
-    }
-
-    function renderContractsList(data) {
-      if (!data.contracts.length) return '<div class="empty-state">Aucun contrat.</div>';
-      return `
-        <div class="stack">
-          ${data.contracts.map(contract => `
-            <div class="tag-card">
-              <div class="meta">
-                <span class="tag-name">${escapeHtml(contract.name)}</span>
-              </div>
-              <div class="tag-actions">
-                <button class="small edit-contract" data-id="${contract.id}">Modifier</button>
-                <button class="small danger delete-contract" data-id="${contract.id}">Supprimer</button>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      `;
     }
 
     function openInstanceModal(mode, instanceId = null) {
@@ -1357,6 +1564,7 @@
           modalEl.querySelector('#networkError').textContent = 'Le nom du réseau est obligatoire.';
           return;
         }
+        const store = getStore();
         const data = getInstanceData(state.instance.id);
         if (existing) {
           existing.name = name;
@@ -1602,10 +1810,6 @@
       return item ? item.name : '—';
     }
 
-    function escapeHtml(value) {
-      return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]));
-    }
-
     function applyBulkImport(data, text) {
       const lines = text.split(/\r?\n/).filter(Boolean);
       for (const row of lines) {
@@ -1669,11 +1873,9 @@
     function runCoreTests() {
       const data = createEmptyData();
       const results = [];
-
-      const line = { id: 'l1', abrev: 'A1', nom: 'Ligne A', reseauId: 'r1', contratId: 'c1', activite: 'Urbaine', mode: 'Autobus', groupe: '', vehicules: [], energies: [], fonctions: [] };
       data.networks.push({ id: 'r1', name: 'Réseau test' });
       data.contracts.push({ id: 'c1', name: 'Contrat test', reseaux: [], prive: false });
-      data.lines.push(line);
+      data.lines.push({ id: 'l1', abrev: 'A1', nom: 'Ligne A', reseauId: 'r1', contratId: 'c1', activite: 'Urbaine', mode: 'Autobus', groupe: '', vehicules: [], energies: [], fonctions: [] });
 
       if (data.lines.length === 1) results.push('✅ initialisation');
       if (data.networks[0].name === 'Réseau test') results.push('✅ réseau');
@@ -1685,8 +1887,7 @@
 
     document.addEventListener('DOMContentLoaded', () => {
       const store = getStore();
-      const user = currentUser();
-      if (user && !Array.isArray(store.users)) {
+      if (!Array.isArray(store.users)) {
         store.users = [];
         saveStore(store);
       }
