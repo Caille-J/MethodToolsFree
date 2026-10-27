@@ -2378,6 +2378,60 @@ function lancerTests() {
     d2.lignes[0].nom = "Modifié dans la copie";
     assert(d1.lignes[0].nom === "Ligne A", "L'original ne doit jamais être modifié par la copie");
   });
+    /* ---- V1.12 : la fiche modules (contrat de branchement) ---- */
+  test("Fiche modules : enregistrement, doublon d'id refusé, vue branchée", () => {
+    const avant = Hastus.modulesDeclares().length;
+    const r = Hastus.enregistrerModule({ id: "test-topo", version: "9", onglet: "🧪 Topo test",
+      vue: (d, core) => {
+        assert(d && d.catalogue, "Le module doit recevoir les données de l'instance");
+        assert(core.h && core.sauver, "Le module doit recevoir la fiche (h, sauver…)");
+        return core.h("<p>ok</p>");
+      } });
+    assert(r.ok, "L'enregistrement devrait réussir : " + (r.erreur || ""));
+    assert(Hastus.modulesDeclares().length === avant + 1, "Le module doit être listé");
+    const r2 = Hastus.enregistrerModule({ id: "test-topo", version: "9", onglet: "Doublon", vue: () => null });
+    assert(!r2.ok, "Un doublon d'id doit être refusé");
+    const r3 = Hastus.enregistrerModule({ onglet: "Sans id", vue: () => null });
+    assert(!r3.ok, "Un module sans id doit être refusé");
+    Hastus._retirer("test-topo");   // nettoyage : le test ne pollue pas l'appli
+    assert(Hastus.modulesDeclares().length === avant, "Le retrait interne doit nettoyer la liste");
+  });
+  test("Fiche modules : un module qui plante ne bloque pas les autres", () => {
+    const avant = Hastus.modulesDeclares().length;
+    const r = Hastus.enregistrerModule({ id: "test-casse", version: "9", onglet: "💥", vue: () => { throw new Error("boom"); } });
+    assert(r.ok, "Un module défaillant doit quand même s'enregistrer (isolation)");
+    let remonte = false;
+    try { Hastus.modulesDeclares().find(m => m.id === "test-casse").vue({ catalogue: {} }, Hastus.core); }
+    catch (e) { remonte = true; }
+    assert(remonte, "L'erreur du module doit remonter à l'appelant (l'espace de travail la capte), pas être avalée");
+    const rOk = Hastus.enregistrerModule({ id: "test-sain", version: "9", onglet: "✅", vue: () => h("<p>ok</p>") });
+    assert(rOk.ok, "Un module sain doit pouvoir s'enregistrer après un défaillant");
+    Hastus._retirer("test-casse"); Hastus._retirer("test-sain");
+    assert(Hastus.modulesDeclares().length === avant, "Nettoyage complet");
+  });
+
+  /* ---- V2.1 : tests du module topo (exécutés SEULEMENT si le module est
+     chargé : la V1 sans module reste à 22/22, avec le module : 24/24). ---- */
+  if (typeof Topo !== "undefined") {
+    test("Topo : schéma versionné + lieu créé, doublon d'abréviation refusé", () => {
+      const d = Noyau.instanceNeuve();
+      const t = Topo.init(d);
+      assert(t.version === "topo-1" && Array.isArray(t.lieux), "d.topo doit exister au schéma topo-1");
+      const r = Topo.creerLieu(d, { nom: "Place de la République", abrev: "REP" });
+      assert(r.ok, "La création d'un lieu valide doit réussir : " + (r.erreurs || []).join(" "));
+      assert(t.lieux.length === 1 && t.lieux[0].id[0] === "t", "Le lieu doit être stocké avec un id topo");
+      const r2 = Topo.creerLieu(d, { nom: "Gare", abrev: "rep" });
+      assert(!r2.ok, "Un doublon d'abréviation (même casse) doit être refusé");
+      const r3 = Topo.creerLieu(d, { nom: "", abrev: "GAR" });
+      assert(!r3.ok, "Un lieu sans nom doit être refusé");
+    });
+    test("Topo : module branché + données vivant dans l'instance (persistantes)", () => {
+      assert(Hastus.modulesDeclares().some(m => m.id === "topo"), "Le module topo doit être enregistré");
+      const d = Noyau.instanceNeuve();
+      Topo.init(d);
+      assert(d.topo !== undefined, "L'espace topo doit vivre DANS les données de l'instance");
+    });
+  }
 
   // Affichage du rapport de tests.
   const ok = results.filter(r => r.ok).length;
