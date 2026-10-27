@@ -75,6 +75,11 @@
   .onglets { display: flex; gap: 8px; flex-wrap: wrap; padding: 8px; border-radius: 14px; background: rgba(148,163,184,0.08); border: 1px solid rgba(148,163,184,0.18); }
   .onglet { background: transparent; border: 1px solid transparent; border-radius: 10px; color: var(--muted); font-weight: 700; padding: 9px 14px; }
   .onglet.actif { background: linear-gradient(180deg, rgba(18,102,229,0.09), rgba(18,102,229,0.04)); border-color: rgba(18,102,229,0.16); color: var(--primary-strong); }
+  /* ---- V2.1-ergo : logo cliquable + bande des modules (topbar) ---- */
+  button.brand { border: none; background: none; box-shadow: none; padding: 4px 8px; border-radius: 12px; cursor: pointer; }
+  button.brand:hover { transform: none; background: rgba(18,102,229,0.08); }
+  .bande-modules { display: inline-flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .sous-onglets { margin: 0 0 14px; }
   /* ---- Grille d'instances (accueil) : auto-fit, cartes à badges ---- */
   .grille-instances { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; margin-top: 18px; }
   .carte.instance-carte { display: block; background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(244,249,255,0.9)); }
@@ -640,6 +645,18 @@ function afficherErreur(msg) {
 }
 window.addEventListener("error", (ev) => afficherErreur(ev.message));
 
+/* Multi-onglets (demande de Jules) : si la même application est ouverte dans
+   plusieurs onglets (ou fenêtres) du navigateur, chaque sauvegarde dans l'un
+   déclenche l'événement "storage" dans les AUTRES. On vide alors le cache
+   mémoire de la BD : le prochain affichage relit les données à jour — sans
+   cela, l'onglet B écraserait les changements de l'onglet A avec un état
+   périmé. (Limite connue : une fenêtre de saisie DÉJÀ OUVERTE dans l'onglet
+   B travaille sur l'ancien état — la refuser n'est pas nécessaire, le
+   dernier enregistrement gagne, objet par objet.) */
+window.addEventListener("storage", (ev) => {
+  if (ev.key === "hastus_libre_v1") BD._raz();
+});
+
 /* Limites de sécurité (demandées + appliquées aussi côté données,
    car un `maxlength` HTML seul peut être contourné). */
 const LIMITES = { nomInstance: 32, descInstance: 256 };
@@ -934,11 +951,18 @@ function vueEspaceTravail(u) {
     <div class="stat"><span class="libelle">Contrats</span><div class="valeur">${dOng.contrats.length}<small>en cours</small></div></div>
     <div class="stat"><span class="libelle">Références</span><div class="valeur">${nbRefs}<small>labels</small></div></div>
   </div>`);
+  /* V2.1-ergo : la BANDE DES MODULES vit dans la barre supérieure (demande
+     de Jules) — toujours accessible, quel que soit l'écran de l'instance.
+     Le bouton « ← Retour » est remplacé par le logo « 🚌 HASTUS libre »,
+     cliquable : il ramène au choix de l'instance. À droite, en symétrie :
+     nom de l'instance + nom de l'utilisateur. */
   const racine = h(`<div>
     <div class="topbar">
       <span class="inline-flex">
-        <button id="retour" class="petit">← Retour</button>
-        <span class="brand"><span class="brand-mark">🚌</span><span>HASTUS libre</span></span>
+        <button id="retour-accueil" class="brand" title="Retour au choix de l'instance">
+          <span class="brand-mark">🚌</span><span>HASTUS libre</span>
+        </button>
+        <span class="bande-modules" id="bande-modules"></span>
       </span>
       <span class="inline-flex">
         <span class="etiquette">${esc(App.instanceOuverte.nom)}</span>
@@ -946,35 +970,46 @@ function vueEspaceTravail(u) {
       </span>
     </div>
     <div class="conteneur" id="haut-travail"></div>
-    <div class="conteneur" id="contenu" ${App.vue === "lignes" ? 'style="max-width:none;"' : ""}></div>
+    <div class="conteneur" id="contenu" ${App.vue === "lignes" || App.vue === "vue" ? 'style="max-width:none;"' : ""}></div>
   </div>`);
-  racine.querySelector("#retour").onclick = () => { App.instanceOuverte = null; App.colonnes = null; rafraichir(); };
+  racine.querySelector("#retour-accueil").onclick = () => { App.instanceOuverte = null; App.colonnes = null; rafraichir(); };
   const haut = racine.querySelector("#haut-travail");
   haut.appendChild(resume);
-  const onglets = h(`<div class="onglets" id="onglets"></div>`);
-  [["lignes", "🚏 Toutes les lignes"], ["vue", "🚌 Réseaux & contrats"],
-   ["catalogue", "🏷️ Catalogue de l'instance" + (nbAP ? ` <span class="etiquette alerte">⚠ ${nbAP}</span>` : "")]].forEach(([cle, label]) => {
-    const b = h(`<button class="onglet ${App.vue === cle ? "actif" : ""}">${label}</button>`);
-    b.onclick = () => { App.vue = cle; rafraichir(); };
-    onglets.appendChild(b);
-  });
-    /* V1.12 — FICHE MODULES : chaque module enregistré ajoute SON onglet ici.
-     Un module absent ou cassé ne bloque jamais la V1 : son onglet n'apparaît
-     simplement pas (le module est isolé, la V1 continue). */
+  const bande = racine.querySelector("#bande-modules");
+  const dansDef = (App.vue === "lignes" || App.vue === "vue");
+  /* 1er module de la bande : Définition réseau (lignes + réseaux & contrats). */
+  const bDef = h(`<button class="onglet ${dansDef ? "actif" : ""}" title="Lignes, réseaux et contrats">🚏 Définition réseau</button>`);
+  bDef.onclick = () => { if (App.vue !== "lignes" && App.vue !== "vue") App.vue = "lignes"; rafraichir(); };
+  bande.appendChild(bDef);
+  /* Puis chaque module enregistré via la fiche (ex. 🗺️ Topologie) : la bande
+     s'agrandit au fil et à mesure des modules. Un module absent ou cassé ne
+     bloque jamais la V1 : son bouton n'apparaît simplement pas. */
   Hastus.modulesDeclares().forEach(m => {
     const cle = "mod:" + m.id;
     const b = h(`<button class="onglet ${App.vue === cle ? "actif" : ""}">${m.onglet}</button>`);
     b.onclick = () => { App.vue = cle; rafraichir(); };
-    onglets.appendChild(b);
+    bande.appendChild(b);
   });
-  haut.appendChild(onglets);
+  /* Enfin le Catalogue de l'instance (badge ⚠ conservé, sur la bande). */
+  const bCat = h(`<button class="onglet ${App.vue === "catalogue" ? "actif" : ""}">🏷️ Catalogue${nbAP ? ` <span class="etiquette alerte">⚠ ${nbAP}</span>` : ""}</button>`);
+  bCat.onclick = () => { if (App.vue !== "catalogue") App.vue = "catalogue"; rafraichir(); };
+  bande.appendChild(bCat);
   const contenu = racine.querySelector("#contenu");
-  if (App.vue === "lignes") contenu.appendChild(vueLignes());
-  if (App.vue === "vue") contenu.appendChild(vueReseauxContrats());
+  /* Module « Définition réseau » : sous-navigation interne entre le tableau
+     des lignes et la vue réseaux & contrats (rien n'est perdu). */
+  if (dansDef) {
+    const sous = h(`<div class="onglets sous-onglets"></div>`);
+    [["lignes", "🚏 Toutes les lignes"], ["vue", "🚌 Réseaux & contrats"]].forEach(([cle, label]) => {
+      const b = h(`<button class="onglet ${App.vue === cle ? "actif" : ""}">${label}</button>`);
+      b.onclick = () => { App.vue = cle; rafraichir(); };
+      sous.appendChild(b);
+    });
+    contenu.appendChild(sous);
+    contenu.appendChild(App.vue === "lignes" ? vueLignes() : vueReseauxContrats());
+  }
   if (App.vue === "catalogue") contenu.appendChild(vueCatalogue());
-  /* V1.12 — chaque module fournit SA vue (il reçoit les données de l'instance
-     + la fiche). Ses erreurs sont captées : bandeau rouge + message dans le
-     panneau, JAMAIS un écran figé. */
+  /* Chaque module fournit SA vue (données de l'instance + fiche). Ses
+     erreurs sont captées : bandeau rouge + message, JAMAIS un écran figé. */
   Hastus.modulesDeclares().forEach(m => {
     if (App.vue !== "mod:" + m.id) return;
     try {
