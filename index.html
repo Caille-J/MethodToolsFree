@@ -82,8 +82,10 @@
   .sous-onglets { margin: 0 0 14px; }
      /* ---- V2.2.1 : écran Topologie (cartouches-filtres, explorateur, carte) ---- */
   .topo-plein { display: flex; flex-direction: column; height: calc(100vh - 118px); }
-  .cartouches { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; position: relative; }
-  .cartouche { border-radius: 16px; padding: 8px 16px; cursor: pointer; font-weight: 600; border: 1px solid rgba(18,102,229,0.25); background: #fff; }
+  .cartouches { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; position: relative; align-items: center; }
+  .filtres-libelle { font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-right: 2px; }
+  .cartouche { border-radius: 999px; padding: 11px 20px; font-size: 15px; cursor: pointer; font-weight: 700; border: 2px solid rgba(18,102,229,0.3); background: #fff; box-shadow: var(--shadow-soft); display: inline-flex; align-items: center; gap: 10px; }
+  .cartouche .loupe { opacity: 0.6; font-weight: 400; font-size: 15px; }
   .cartouche.actif { background: var(--primary); color: #fff; border-color: var(--primary); }
   .cartouche-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 3000; background: #fff; border: 1px solid rgba(148,163,184,0.3); border-radius: 14px; box-shadow: rgba(15,23,42,0.18) 0 12px 28px; padding: 10px; min-width: 300px; max-width: 360px; }
   .cp-liste { overflow: auto; max-height: 200px; display: flex; flex-direction: column; margin: 8px 0; }
@@ -101,8 +103,13 @@
   .topo-carte { position: relative; height: 100%; min-height: 0; border-radius: 20px; overflow: hidden; background: #e5eaf0; }
   .topo-carte > div:first-child { position: absolute; inset: 0; height: 100%; }
   .topo-carte #topo-carte-fallback { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 20px; }
-  /* Les fenêtres modales passent AU-DESSUS de la carte Leaflet (z-index élevés). */
-  .modal-fond { z-index: 3000; }
+  /* IMPORTANT (bug V2.2.1) : pour que les fenêtres modales (pop-up ⚙,
+     création d'arrêt…) passent AU-DESSUS de la carte Leaflet (dont les
+     calques vont jusqu'à z-index 1000), le z-index: 3000 est réglé
+     DIRECTEMENT dans la règle .modal-fond de la section « Fenêtres
+     modales ». Une règle placée ICI (plus haut dans le fichier) serait
+     écrasée par la règle d'origine : à priorité égale, la DERNIÈRE
+     règle du fichier gagne. */
   @media (max-width: 900px) { .topo-disposition { grid-template-columns: 1fr; } }
   /* ---- Grille d'instances (accueil) : auto-fit, cartes à badges ---- */
   .grille-instances { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; margin-top: 18px; }
@@ -166,7 +173,7 @@
   .libelle button { border: none; background: none; padding: 0 2px; color: #94a3b8; }
   .libelle button:hover { color: var(--primary); }
   /* ---- Fenêtres modales ---- */
-  .modal-fond { position: fixed; inset: 0; background: rgba(15,23,42,0.54); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 18px; }
+  .modal-fond { position: fixed; inset: 0; background: rgba(15,23,42,0.54); display: flex; align-items: center; justify-content: center; z-index: 3000; padding: 18px; }
   .modal { background: rgba(255,255,255,0.97); border: 1px solid rgba(148,163,184,0.2); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; width: 100%; max-width: 560px; max-height: 88vh; overflow-y: auto; }
   .ligne-boutons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; flex-wrap: wrap; }
   /* ---- Suppression sensible (double clic en 3 s) ---- */

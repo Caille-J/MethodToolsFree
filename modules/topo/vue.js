@@ -1,18 +1,19 @@
-/* V2.2.1 — Module TOPO, partie VUE (affichage uniquement).
-   Ergonomie demandée par Jules (corrections V2.2.1) :
-   ① TROIS CARTOUCHES de filtre : 🚌 Réseaux, 🚏 Lignes, 🗂️ Groupes de
-     lignes. Cliquer une cartouche ouvre sa liste : cases à cocher
-     multiples + champ de recherche + bouton « Tout afficher ». Les
-     filtres sont CUMULATIFS et en CASCADE : si des réseaux sont
-     sélectionnés, la cartouche Lignes ne propose QUE leurs lignes.
-   ② Un écart net entre la bande de boutons et les compartiments.
-   ③ Tout tient sur une page sans défilement (hauteur calculée sur la
-     fenêtre) ; les listes défilent À L'INTÉRIEUR de leur cadre.
-   ④ Compartiments plein écran (largeur totale utilisée).
-   ⑤ « ➕ Créer un arrêt » : le bouton change de couleur (armé) et
-     ENSUITE chaque clic sur la carte ouvre la fenêtre de création
-     pré-remplie des coordonnées — le bouton reste armé jusqu'à ce
-     qu'on le reclique.
+/* V2.2.2 — Module TOPO, partie VUE (affichage uniquement).
+   Nouveautés demandées par Jules (V2.2.2) :
+   ① Les cartouches de filtre sont PLUS GROSSES, arrondies en pilule, avec
+     une LOUPE 🔍 à droite de chaque bulle + un libellé « 🔎 Filtrer : »
+     devant : on comprend d'un coup d'œil que ce sont des filtres.
+   ② Un filtre sélectionné MASQUE les objets exclus de l'explorateur
+     (ils ne sont plus seulement grisés : ils disparaissent).
+   ③ Tout objet géolocalisé visible dans l'explorateur apparaît AUSSI sur
+     la carte : les arrêts (épingles) ET les lieux sans arrêt rattaché
+     (points gris). Les réseaux/lignes n'ont pas de position GPS : ils ne
+     peuvent figurer que dans l'explorateur (le lien arrêt↔ligne vient
+     avec les chemins V2.3).
+   ④ « ➕ Créer un arrêt » arme le mode création (bouton vert) puis CHAQUE
+     clic sur la carte ouvre la fenêtre pré-remplie des coordonnées ;
+     un bandeau orange rappelle que le mode est armé. (Le vrai bug « rien
+     ne se passe » venait du z-index de .modal-fond, corrigé côté CSS.)
    Contrat module : la vue ne touche jamais aux données en direct. */
 "use strict";
 
@@ -103,20 +104,28 @@ window.Topo.vue = (d, core) => {
   return racine;
 };
 
-/* Liste des arrêts avec les coordonnées de leur lieu (ce que la carte
-   affiche et rend sélectionnable). */
-function arretsVisibles(d) {
+/* Objets à afficher sur la carte : les arrêts (épingles, avec les
+   coordonnées de leur lieu) ET les lieux sans aucun arrêt rattaché
+   (points gris) — tout ce qui est géolocalisé, comme l'explorateur. */
+function objetsCarte(d) {
   const lieux = new Map(d.topo.lieux.map(l => [l.id, l]));
-  return d.topo.arrets.map(a => {
+  const utilises = new Set(d.topo.arrets.map(a => a.lieuId).filter(Boolean));
+  const arrets = d.topo.arrets.map(a => {
     const l = lieux.get(a.lieuId) || {};
     return { id: a.id, nom: a.nom, abrev: a.abrev, lat: l.lat == null ? null : l.lat, lng: l.lng == null ? null : l.lng };
   });
+  const lieuxLibres = d.topo.lieux
+    .filter(l => !utilises.has(l.id) && l.lat != null && l.lng != null)
+    .map(l => ({ id: l.id, nom: l.nom, abrev: l.abrev, lat: l.lat, lng: l.lng }));
+  return { arrets, lieuxLibres };
 }
 
 function rafraichirMarqueurs(d, core) {
   const t = topoEtat();
-  TopoCarte.majArrets(arretsVisibles(d), {
+  const o = objetsCarte(d);
+  TopoCarte.majArrets(o.arrets, {
     etiquettes: t.reglages.etiquettes,
+    lieuxLibres: o.lieuxLibres,                    // lieux sans arrêt : points gris
     selection: (a) => { t.selection = a.id; core.rafraichir(); }
   });
 }
@@ -124,9 +133,11 @@ function rafraichirMarqueurs(d, core) {
 /* ----- CARTOUCHES DE FILTRE ----- */
 
 function dessinerCartouches(zone, d, core, t) {
+  /* Libellé explicite : on comprend que ces bulles sont des FILTRES. */
+  zone.appendChild(core.h(`<span class="filtres-libelle">🔎 Filtrer :</span>`));
   [["reseaux", "🚌 Réseaux"], ["lignes", "🚏 Lignes"], ["groupes", "🗂️ Groupes de lignes"]].forEach(([cle, label]) => {
     const nb = t.filtres[cle].length;
-    const b = core.h(`<button class="cartouche ${nb ? "actif" : ""}" title="Filtrer — cliquez pour choisir">${label}${nb ? ` <span class="etiquette">${nb}</span>` : ""}</button>`);
+    const b = core.h(`<button class="cartouche ${nb ? "actif" : ""}" title="Filtrer par ${label.slice(2)} — cliquez pour choisir">${label}${nb ? ` <span class="etiquette">${nb}</span>` : ""}<span class="loupe">🔍</span></button>`);
     b.onclick = () => { t.popover = (t.popover === cle) ? null : cle; core.rafraichir(); };
     zone.appendChild(b);
   });
@@ -186,6 +197,10 @@ function dessinerBande(bande, d, core, t) {
     core.rafraichir();
   };
   bande.appendChild(bCreer);
+  /* Mode création armé : un bandeau orange rappelle quoi faire ensuite
+     (c'est l'arme anti « le bouton ne marche pas » : le bouton ARME,
+     la création se fait en cliquant sur la CARTE). */
+  if (t.creation) bande.appendChild(core.h(`<span class="etiquette alerte">Mode création armé : cliquez sur la carte où créer l'arrêt</span>`));
   /* — les boutons suivants (chemins, imports…) s'inséreront ici — */
   const bReglages = core.h(`<button class="onglet" title="Paramétrage de la carte">⚙</button>`);
   bReglages.onclick = () => popupReglages(d, core);
@@ -198,30 +213,39 @@ function dessinerExplorateur(cible, d, core) {
   const t = topoEtat();
   const f = t.filtres;
   const lieux = new Map(d.topo.lieux.map(l => [l.id, l]));
-  cible.appendChild(core.h(`<p class="info-txt">Explorateur — les objets exclus par les cartouches sont grisés ; cliquer un arrêt géolocalisé recentre la carte.</p>`));
+  cible.appendChild(core.h(`<p class="info-txt">Explorateur — les objets exclus par les filtres sont masqués ; cliquer un arrêt géolocalisé recentre la carte.</p>`));
 
+  /* Réseaux : un filtre Réseaux actif MASQUE les réseaux non cochés. */
   cible.appendChild(core.h(`<h4>🚌 Réseaux</h4>`));
+  const reseauxVisibles = d.reseaux.filter(r => !f.reseaux.length || f.reseaux.includes(r.id));
   if (!d.reseaux.length) cible.appendChild(core.h(`<p class="info-txt">Aucun réseau.</p>`));
-  d.reseaux.forEach(r => {
-    const exclus = f.reseaux.length && !f.reseaux.includes(r.id);
-    const b = core.h(`<div class="item-objet ${exclus ? "grise" : ""} ${t.selection === r.id ? "sel" : ""}">${core.esc(r.nom)}</div>`);
+  else if (!reseauxVisibles.length) cible.appendChild(core.h(`<p class="info-txt">Tous les réseaux sont masqués par les filtres.</p>`));
+  reseauxVisibles.forEach(r => {
+    const b = core.h(`<div class="item-objet ${t.selection === r.id ? "sel" : ""}">${core.esc(r.nom)}</div>`);
     b.onclick = () => { t.selection = r.id; core.rafraichir(); };
     cible.appendChild(b);
   });
 
+  /* Lignes : masquées si leur réseau, leur groupe ou elles-mêmes sont
+     exclus par les filtres. */
   cible.appendChild(core.h(`<h4>🚏 Lignes</h4>`));
+  const lignesVisibles = d.lignes.filter(l =>
+    (!f.reseaux.length || f.reseaux.includes(l.reseauId))
+    && (!f.groupes.length || f.groupes.includes(l.groupe))
+    && (!f.lignes.length || f.lignes.includes(l.id)));
   if (!d.lignes.length) cible.appendChild(core.h(`<p class="info-txt">Aucune ligne.</p>`));
-  d.lignes.forEach(l => {
-    const exclus = (f.reseaux.length && !f.reseaux.includes(l.reseauId))
-      || (f.groupes.length && !f.groupes.includes(l.groupe))
-      || (f.lignes.length && !f.lignes.includes(l.id));
-    const b = core.h(`<div class="item-objet ${exclus ? "grise" : ""} ${t.selection === l.id ? "sel" : ""}">${core.esc(l.abrev)} — ${core.esc(l.nom)}</div>`);
+  else if (!lignesVisibles.length) cible.appendChild(core.h(`<p class="info-txt">Toutes les lignes sont masquées par les filtres.</p>`));
+  lignesVisibles.forEach(l => {
+    const b = core.h(`<div class="item-objet ${t.selection === l.id ? "sel" : ""}">${core.esc(l.abrev)} — ${core.esc(l.nom)}</div>`);
     b.onclick = () => { t.selection = l.id; core.rafraichir(); };
     cible.appendChild(b);
   });
 
+  /* Arrêts : tous visibles (aucun lien arrêt↔ligne encore : le filtrage
+     des arrêts arrivera avec les chemins V2.3). Les lieux sans arrêt
+     rattaché apparaissent aussi (ils sont sur la carte en gris). */
   cible.appendChild(core.h(`<h4>📍 Arrêts</h4>`));
-  if (!d.topo.arrets.length) cible.appendChild(core.h(`<p class="info-txt">Aucun arrêt — armez « ➕ Créer un arrêt » puis cliquez sur la carte.</p>`));
+  if (!d.topo.arrets.length && !d.topo.lieux.length) cible.appendChild(core.h(`<p class="info-txt">Aucun arrêt — armez « ➕ Créer un arrêt » puis cliquez sur la carte.</p>`));
   d.topo.arrets.forEach(a => {
     const l = lieux.get(a.lieuId) || {};
     const sansGps = (l.lat == null || l.lng == null);
@@ -233,6 +257,21 @@ function dessinerExplorateur(cible, d, core) {
     };
     cible.appendChild(b);
   });
+  const utilises = new Set(d.topo.arrets.map(a => a.lieuId).filter(Boolean));
+  const libres = d.topo.lieux.filter(l => !utilises.has(l.id));
+  if (libres.length) {
+    cible.appendChild(core.h(`<h4>📍 Lieux sans arrêt</h4>`));
+    libres.forEach(l => {
+      const sansGps = (l.lat == null || l.lng == null);
+      const b = core.h(`<div class="item-objet ${t.selection === l.id ? "sel" : ""}">${core.esc(l.nom)} <small>(${core.esc(l.abrev)})</small>${sansGps ? ' <span class="etiquette alerte">⚠ GPS</span>' : ""}</div>`);
+      b.onclick = () => {
+        t.selection = l.id;
+        if (!sansGps) TopoCarte.centrer(l.lat, l.lng);
+        core.rafraichir();
+      };
+      cible.appendChild(b);
+    });
+  }
 }
 
 /* ----- FENÊTRE DE CRÉATION D'ARRÊT ----- */

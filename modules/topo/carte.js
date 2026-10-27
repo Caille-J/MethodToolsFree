@@ -1,4 +1,4 @@
-/* V2.2.1 — Module TOPO, partie CARTE (affichage uniquement).
+/* V2.2.2 — Module TOPO, partie CARTE (affichage uniquement).
    Namespace global "TopoCarte" : encapsule TOUT Leaflet pour garder la
    carte remplaçable (ESRI sans clé aujourd'hui, MapTiler possible
    demain : on ne change QUE ce fichier). Chargé après donnees.js, avant
@@ -7,7 +7,10 @@
 
    V2.2.1 : la carte MÉMORISE sa dernière position (centre + zoom) —
    chaque ré-affichage (filtre, création…) la recrée à l'identique au
-   lieu de rebondir sur la France entière. */
+   lieu de rebondir sur la France entière.
+   V2.2.2 : majArrets dessine AUSSI les lieux sans arrêt rattaché
+   (points gris) : tout objet géolocalisé de l'explorateur figure sur
+   la carte. */
 "use strict";
 window.TopoCarte = (() => {
 
@@ -62,7 +65,9 @@ window.TopoCarte = (() => {
     if (carte) carte.flyTo([Number(lat), Number(lng)], derniereVue.zoom);
   }
 
-  /* Redessine les épingles d'arrêts. Chaque item : {id, nom, abrev, lat, lng}. */
+  /* Redessine les épingles d'arrêts (items {id, nom, abrev, lat, lng})
+     PUIS les lieux sans arrêt (opts.lieuxLibres) en POINTS GRIS :
+     tout objet géolocalisé de l'explorateur est ainsi sur la carte. */
   function majArrets(arrets, opts) {
     if (!carte || !coucheArrets) return;
     coucheArrets.clearLayers();
@@ -72,6 +77,15 @@ window.TopoCarte = (() => {
       m.bindPopup("<b>" + escLocal(a.nom) + "</b><br><small>Arrêt " + escLocal(a.abrev) + "</small>");
       if (opts && opts.etiquettes) m.bindTooltip(escLocal(a.nom), { permanent: true, direction: "top", className: "topo-etiquette" });
       m.on("click", () => { if (opts && opts.selection) opts.selection(a); });   // sélectionnable.
+      coucheArrets.addLayer(m);
+    });
+    /* Lieux sans arrêt rattaché : petits cercles gris, sélectionnables. */
+    if (opts && opts.lieuxLibres) opts.lieuxLibres.forEach(l => {
+      if (l.lat == null || l.lng == null) return;
+      const m = L.circleMarker([l.lat, l.lng], { radius: 6, color: "#64748b", weight: 2, fillColor: "#cbd5e1", fillOpacity: 1 });
+      m.bindPopup("<b>" + escLocal(l.nom) + "</b><br><small>Lieu (sans arrêt rattaché)</small>");
+      if (opts.etiquettes) m.bindTooltip(escLocal(l.nom), { permanent: true, direction: "top", className: "topo-etiquette" });
+      m.on("click", () => { if (opts.selection) opts.selection(l); });
       coucheArrets.addLayer(m);
     });
   }
