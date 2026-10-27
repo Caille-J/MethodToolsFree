@@ -80,6 +80,23 @@
   button.brand:hover { transform: none; background: rgba(18,102,229,0.08); }
   .bande-modules { display: inline-flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .sous-onglets { margin: 0 0 14px; }
+    /* ---- V2.2 : écran Topologie (filtres actifs, explorateur, carte) ---- */
+  .puces-filtres { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; }
+  .puce { border-radius: 999px; padding: 6px 14px; cursor: pointer; font-weight: 500; border: 1px solid rgba(18,102,229,0.25); background: #fff; }
+  .puce.actif { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .puce.actif .etiquette { background: rgba(255,255,255,0.25); }
+  .puce:hover { transform: translateY(-1px); }
+  .topo-disposition { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; align-items: stretch; }
+  .explorateur { max-height: 74vh; overflow: auto; padding: 14px; }
+  .explorateur h4 { margin: 12px 0 6px; }
+  .explorateur h4:first-of-type { margin-top: 0; }
+  .item-objet { padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+  .item-objet:hover { background: rgba(18,102,229,0.08); }
+  .item-objet.sel { background: rgba(18,102,229,0.16); outline: 1px solid var(--primary); }
+  .topo-carte { position: relative; min-height: 74vh; border-radius: 20px; overflow: hidden; background: #e5eaf0; box-shadow: rgba(15,23,42,0.08) 0 8px 24px; }
+  .topo-carte > div:first-child { position: absolute; inset: 0; height: 100%; }
+  .topo-carte #topo-carte-fallback { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 20px; }
+  @media (max-width: 900px) { .topo-disposition { grid-template-columns: 1fr; } }
   /* ---- Grille d'instances (accueil) : auto-fit, cartes à badges ---- */
   .grille-instances { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; margin-top: 18px; }
   .carte.instance-carte { display: block; background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(244,249,255,0.9)); }
@@ -186,6 +203,7 @@
     font-size: 12px; font-weight: 400; width: 300px; white-space: normal; z-index: 60;
   }
 </style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body>
 <div id="app"></div>
@@ -974,7 +992,7 @@ function vueEspaceTravail(u) {
   </div>`);
   racine.querySelector("#retour-accueil").onclick = () => { App.instanceOuverte = null; App.colonnes = null; rafraichir(); };
   const haut = racine.querySelector("#haut-travail");
-  haut.appendChild(resume);
+  if (App.vue !== "mod:topo") haut.appendChild(resume);
   const bande = racine.querySelector("#bande-modules");
   const dansDef = (App.vue === "lignes" || App.vue === "vue");
   /* 1er module de la bande : Définition réseau (lignes + réseaux & contrats). */
@@ -2466,6 +2484,22 @@ function lancerTests() {
       Topo.init(d);
       assert(d.topo !== undefined, "L'espace topo doit vivre DANS les données de l'instance");
     });
+        test("Topo : un nouvel arrêt génère un lieu du même nom aux mêmes coordonnées", () => {
+      const d = Noyau.instanceNeuve(); Topo.init(d);
+      const r = Topo.creerArret(d, { nom: "Gare Centre", abrev: "GCE", lat: 48.1, lng: -1.6 });
+      assert(r.ok, "La création d'arrêt doit réussir");
+      assert(d.topo.lieux.length === 1, "Un lieu doit être créé automatiquement");
+      assert(d.topo.lieux[0].nom === "Gare Centre" && d.topo.lieux[0].lat === 48.1 && d.topo.lieux[0].lng === -1.6, "Le lieu porte le même nom et les mêmes coordonnées");
+      assert(d.topo.arrets[0].lieuId === d.topo.lieux[0].id, "L'arrêt doit être rattaché au lieu créé");
+    });
+    test("Topo : rattacher un arrêt à un lieu existant n'en crée pas un nouveau", () => {
+      const d = Noyau.instanceNeuve(); Topo.init(d);
+      const r1 = Topo.creerArret(d, { nom: "Place", abrev: "PL", lat: 1, lng: 2 });
+      const lieuId = r1.lieu.id;
+      const r2 = Topo.creerArret(d, { nom: "Arrêt 2", abrev: "A2", lieuId: lieuId });
+      assert(r2.ok && d.topo.lieux.length === 1, "Aucun lieu supplémentaire ne doit être créé");
+      assert(r2.arret.lieuId === lieuId, "L'arrêt est rattaché au lieu existant");
+    });
   }
 
   // Affichage du rapport de tests.
@@ -2538,7 +2572,9 @@ rafraichir();
 <!-- V2.1 — MODULE TOPO : chargé APRÈS le script principal, il se branche
      tout seul via la fiche Hastus. Si ces fichiers sont absents ou cassés,
      la V1 continue de fonctionner sans l'onglet Topologie. -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="modules/topo/donnees.js"></script>
+<script src="modules/topo/carte.js"></script>
 <script src="modules/topo/vue.js"></script>
 <script src="modules/topo/manifeste.js"></script>
 </body>

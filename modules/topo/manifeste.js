@@ -1,16 +1,9 @@
-/* ================================================================
-   MODULE TOPO — fichier 3/3 : manifeste.js (la « fiche d'identité »)
-   ----------------------------------------------------------------
-   C'est LE point de branchement : ce fichier s'enregistre auprès de la
-   fiche Hastus (posée par la V1.12). L'ordre de chargement des 3
-   fichiers est : donnees.js, puis vue.js, puis ce manifeste (il a
-   besoin des deux premiers).                                                    */
-window.Topo = window.Topo || {};
-
-const r = Hastus.enregistrerModule({
-  id: "topo",                     // identifiant unique du module (-> onglet mod:topo)
-  version: "2.1-squelette",
+/* V2.2 — Module TOPO, MANIFESTE : branche le module sur la V1 via la
+   fiche Hastus. Chargé en DERNIER (après donnees.js, carte.js, vue.js). */
+"use strict";
+Hastus.enregistrerModule({
+  id: "topo",
+  version: "2.2-ecran",
   onglet: "🗺️ Topologie",
-  vue: (donnees, core) => Topo.vue(donnees, core)   // délégation : le manifeste ne fait que raccorder
+  vue: (d, core) => Topo.vue(d, core)
 });
-if (!r.ok) afficherErreur("Module topo : " + r.erreur);
