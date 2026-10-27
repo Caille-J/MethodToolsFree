@@ -1,9 +1,13 @@
-/* V2.2 — Module TOPO, partie CARTE (affichage uniquement).
+/* V2.2.1 — Module TOPO, partie CARTE (affichage uniquement).
    Namespace global "TopoCarte" : encapsule TOUT Leaflet pour garder la
    carte remplaçable (ESRI sans clé aujourd'hui, MapTiler possible
    demain : on ne change QUE ce fichier). Chargé après donnees.js, avant
    vue.js. Si la bibliothèque Leaflet n'est pas chargée (CDN coupé),
-   chaque fonction se tait sans jamais faire planter l'application. */
+   chaque fonction se tait sans jamais faire planter l'application.
+
+   V2.2.1 : la carte MÉMORISE sa dernière position (centre + zoom) —
+   chaque ré-affichage (filtre, création…) la recrée à l'identique au
+   lieu de rebondir sur la France entière. */
 "use strict";
 window.TopoCarte = (() => {
 
@@ -15,6 +19,7 @@ window.TopoCarte = (() => {
 
   let carte = null, fondCourant = null, coucheArrets = null, coucheLieux = null;
   let dernierReglages = null;
+  let derniereVue = null;   // {lat, lng, zoom} — conservé entre ré-affichages.
 
   const escLocal = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, c =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -28,7 +33,17 @@ window.TopoCarte = (() => {
     if (carte) { carte.remove(); carte = null; }       // ré-affichage : on repart propre.
     carte = L.map(el, { zoomControl: true, attributionControl: true });
     fondCourant = L.tileLayer(FONDS.plan.url, { attribution: FONDS.plan.attrib, maxZoom: 19 }).addTo(carte);
-    carte.setView([46.6, 2.4], 5);                     // France entière au départ.
+    /* Position de départ : la dernière vue connue, sinon la France. */
+    if (derniereVue) carte.setView([derniereVue.lat, derniereVue.lng], derniereVue.zoom);
+    else carte.setView([46.6, 2.4], 5);
+    /* Chaque déplacement/zoom est mémorisé : le prochain ré-affichage
+       (filtre, sélection, création) retrouvera la carte EXACTEMENT où
+       l'utilisateur l'a laissée. */
+    carte.on("moveend zoomend", () => {
+      if (!carte) return;
+      const c = carte.getCenter();
+      derniereVue = { lat: c.lat, lng: c.lng, zoom: carte.getZoom() };
+    });
     coucheArrets = L.layerGroup().addTo(carte);
     coucheLieux = L.layerGroup();                       // hors carte par défaut (réglage).
     if (dernierReglages) appliquer(dernierReglages);    // conserve les réglages entre ré-affichages.
@@ -40,12 +55,15 @@ window.TopoCarte = (() => {
   /* Mode création : la vue passe une fonction appelée à chaque clic. */
   function clic(fn) { if (carte) carte.on("click", (ev) => fn(ev.latlng.lat, ev.latlng.lng)); }
 
-  /* Centre la carte sur un point (avec une petite animation flyTo). */
-  function centrer(lat, lng, zoom) { if (carte && lat != null && lng != null) carte.flyTo([Number(lat), Number(lng)], zoom || 15); }
+  /* Centre la carte sur un point (animation flyTo) ET mémorise la vue. */
+  function centrer(lat, lng, zoom) {
+    if (lat == null || lng == null) return;
+    derniereVue = { lat: Number(lat), lng: Number(lng), zoom: zoom || 15 };
+    if (carte) carte.flyTo([Number(lat), Number(lng)], derniereVue.zoom);
+  }
 
   /* Redessine les épingles d'arrêts. Chaque item : {id, nom, abrev, lat, lng}. */
   function majArrets(arrets, opts) {
-    dernierReglages = dernierReglages || {};
     if (!carte || !coucheArrets) return;
     coucheArrets.clearLayers();
     arrets.forEach(a => {

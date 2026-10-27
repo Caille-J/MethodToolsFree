@@ -1,38 +1,69 @@
-/* V2.2 — Module TOPO, partie VUE (affichage uniquement).
-   Ergonomie demandée par Jules (V2.2) :
-   ① À la place des cartouches statistiques : des FILTRES ACTIFS (puces)
-     qui affichent/masquent chaque type d'objet sur la carte ET dans
-     l'explorateur, et les rendent sélectionnables (écran Topologie seul).
-   ② La bande d'onglets topo = les boutons de la carte : 1er bouton
-     « ➕ Créer un arrêt », boutons suivants à venir, et en FIN de bande
-     un ⚙ ouvrant le pop-up de paramétrage de la carte.
-   ③ Deux compartiments : gauche 1/3 = EXPLORATEUR D'OBJETS (réseaux,
-     lignes, arrêts), droite 2/3 = CARTE INTERACTIVE (Leaflet/ESRI).
-   Contrat module respecté : la vue ne touche jamais aux données en
-   direct, tout passe par la fiche (core) et Topo (données). */
+/* V2.2.1 — Module TOPO, partie VUE (affichage uniquement).
+   Ergonomie demandée par Jules (corrections V2.2.1) :
+   ① TROIS CARTOUCHES de filtre : 🚌 Réseaux, 🚏 Lignes, 🗂️ Groupes de
+     lignes. Cliquer une cartouche ouvre sa liste : cases à cocher
+     multiples + champ de recherche + bouton « Tout afficher ». Les
+     filtres sont CUMULATIFS et en CASCADE : si des réseaux sont
+     sélectionnés, la cartouche Lignes ne propose QUE leurs lignes.
+   ② Un écart net entre la bande de boutons et les compartiments.
+   ③ Tout tient sur une page sans défilement (hauteur calculée sur la
+     fenêtre) ; les listes défilent À L'INTÉRIEUR de leur cadre.
+   ④ Compartiments plein écran (largeur totale utilisée).
+   ⑤ « ➕ Créer un arrêt » : le bouton change de couleur (armé) et
+     ENSUITE chaque clic sur la carte ouvre la fenêtre de création
+     pré-remplie des coordonnées — le bouton reste armé jusqu'à ce
+     qu'on le reclique.
+   Contrat module : la vue ne touche jamais aux données en direct. */
 "use strict";
 
-/* État d'affichage du module (non persisté : ce sont des réglages de
-   confort, pas des données métier). App.topo est créé une fois. */
+/* État d'affichage du module (réglages de confort, non persistés). */
 function topoEtat() {
   if (!App.topo) App.topo = {
-    filtres: { reseaux: true, lignes: true, arrets: true },   // puces actives
+    filtres: { reseaux: [], lignes: [], groupes: [] },   // [] = tout afficher
     reglages: { fond: "plan", couches: { arrets: true, lieux: false }, etiquettes: true },
-    creation: false,        // mode « cliquer la carte pour créer un arrêt »
-    selection: null         // id de l'objet sélectionné (explorateur/carte)
+    creation: false,      // bouton « Créer un arrêt » armé ?
+    popover: null,        // cartouche dont la liste est ouverte ("reseaux"…)
+    selection: null        // id de l'objet sélectionné (explorateur/carte)
   };
   return App.topo;
 }
 
-/* La vue du module, branchée par manifeste.js. */
+/* ----- CASCADE DE FILTRES ----- */
+
+/* Lignes visibles selon les réseaux ET groupes sélectionnés. */
+function lignesAffichables(d, t) {
+  const f = t.filtres;
+  let ls = d.lignes;
+  if (f.reseaux.length) ls = ls.filter(l => f.reseaux.includes(l.reseauId));
+  if (f.groupes.length) ls = ls.filter(l => f.groupes.includes(l.groupe));
+  return ls;
+}
+
+/* Groupes présents dans les lignes des réseaux sélectionnés. */
+function groupesAffichables(d, t) {
+  const f = t.filtres;
+  let ls = d.lignes;
+  if (f.reseaux.length) ls = ls.filter(l => f.reseaux.includes(l.reseauId));
+  return [...new Set(ls.map(l => l.groupe).filter(g => g))];
+}
+
+/* Après chaque changement : retire les sélections devenues hors cascade
+   (ex. une ligne décochée car son réseau vient d'être retiré). */
+function harmoniserFiltres(d, t) {
+  t.filtres.lignes = t.filtres.lignes.filter(id => lignesAffichables(d, t).some(l => l.id === id));
+  t.filtres.groupes = t.filtres.groupes.filter(g => groupesAffichables(d, t).includes(g));
+}
+
+/* ----- LA VUE ----- */
+
 window.Topo.vue = (d, core) => {
   Topo.init(d);
   const t = topoEtat();
-  const nbR = d.reseaux.length, nbL = d.lignes.length, nbA = d.topo.arrets.length;
+  harmoniserFiltres(d, t);
 
-  const racine = core.h(`<div>
-    <div class="puces-filtres" id="topo-filtres"></div>
-    <div class="onglets" id="topo-onglets"></div>
+  const racine = core.h(`<div class="topo-plein" id="topo-cadre">
+    <div class="cartouches" id="topo-filtres"></div>
+    <div class="onglets topo-onglets" id="topo-onglets"></div>
     <div class="topo-disposition">
       <div class="explorateur panneau-travail" id="topo-explorateur"></div>
       <div class="topo-carte" id="topo-carte-cadre">
@@ -42,42 +73,29 @@ window.Topo.vue = (d, core) => {
     </div>
   </div>`);
 
-  /* ① PUCES DE FILTRES (chips) : cliquer = afficher/masquer un type
-     d'objet. Le compteur remplace l'ancienne capsule statistique. */
-  const filtres = racine.querySelector("#topo-filtres");
-  [["reseaux", "🚌 Réseaux", nbR], ["lignes", "🚏 Lignes", nbL], ["arrets", "📍 Arrêts", nbA]].forEach(([cle, label, n]) => {
-    const p = core.h(`<button class="puce ${t.filtres[cle] ? "actif" : ""}">${label} <span class="etiquette">${n}</span></button>`);
-    p.onclick = () => { t.filtres[cle] = !t.filtres[cle]; core.rafraichir(); };
-    filtres.appendChild(p);
-  });
+  dessinerCartouches(racine.querySelector("#topo-filtres"), d, core, t);
+  dessinerBande(racine.querySelector("#topo-onglets"), d, core, t);
+  dessinerExplorateur(racine.querySelector("#topo-explorateur"), d, core, t);
 
-  /* ② BANDE DES BOUTONS DE LA CARTE. */
-  const bande = racine.querySelector("#topo-onglets");
-  const bCreer = core.h(`<button class="onglet ${t.creation ? "actif" : ""}" title="Créer un arrêt, ou activer le mode « cliquer sur la carte »">➕ Créer un arrêt</button>`);
-  bCreer.onclick = () => { t.creation = !t.creation; core.rafraichir(); };
-  bande.appendChild(bCreer);
-  /* — les boutons suivants (chemins, imports…) s'inséreront ici — */
-  const bReglages = core.h(`<button class="onglet" title="Paramétrage de la carte">⚙</button>`);
-  bReglages.onclick = () => popupReglages(d, core);
-  bande.appendChild(bReglages);
-
-  /* ③ EXPLORATEUR D'OBJETS (gauche) : réseaux, lignes, arrêts —
-     filtrés par les puces. Cliquer un arrêt géolocalisé centre la carte
-     dessus et le sélectionne ; les coordonnées viennent du lieu porté. */
-  dessinerExplorateur(racine.querySelector("#topo-explorateur"), d, core);
-
-  /* CARTE (droite) : initialisation différée — la carte Leaflet ne peut
-     être créée qu'une fois la div réellement attachée à la page. */
   setTimeout(() => {
+    /* Hauteur exacte pour tenir sur UNE page sans défilement : on
+       mesure où commence le cadre et on occupe tout le reste. */
+    const cadre = document.getElementById("topo-cadre");
+    if (cadre && cadre.getBoundingClientRect) {
+      const r = cadre.getBoundingClientRect();
+      if (r && typeof r.top === "number" && r.top > 0 && typeof window.innerHeight === "number") {
+        cadre.style.height = Math.max(320, window.innerHeight - r.top - 14) + "px";
+      }
+    }
     const ok = TopoCarte.init("topo-carte-div");
     const fb = document.getElementById("topo-carte-fallback");
     if (fb) fb.textContent = ok ? "" :
       "Carte indisponible (bibliothèque non chargée) : l'explorateur et la création d'arrêts restent utilisables.";
     if (ok) {
       TopoCarte.appliquer(t.reglages);
-      TopoCarte.clic((lat, lng) => {
-        if (t.creation) { t.creation = false; formulaireArret(d, core, lat, lng); core.rafraichir(); }
-      });
+      /* Mode création armé : CHAQUE clic sur la carte ouvre la fenêtre
+         de création pré-remplie (le bouton reste armé). */
+      TopoCarte.clic((lat, lng) => { if (t.creation) formulaireArret(d, core, lat, lng); });
       rafraichirMarqueurs(d, core);
     }
   }, 0);
@@ -85,11 +103,9 @@ window.Topo.vue = (d, core) => {
   return racine;
 };
 
-/* Liste des arrêts VISIBLES (filtre actif) avec les coordonnées de leur
-   lieu : c'est ce que la carte affiche et rend sélectionnable. */
+/* Liste des arrêts avec les coordonnées de leur lieu (ce que la carte
+   affiche et rend sélectionnable). */
 function arretsVisibles(d) {
-  const t = topoEtat();
-  if (!t.filtres.arrets) return [];
   const lieux = new Map(d.topo.lieux.map(l => [l.id, l]));
   return d.topo.arrets.map(a => {
     const l = lieux.get(a.lieuId) || {};
@@ -105,52 +121,123 @@ function rafraichirMarqueurs(d, core) {
   });
 }
 
-/* Explorateur : trois sections (réseaux, lignes, arrêts) selon filtres. */
-function dessinerExplorateur(cible, d, core) {
-  const t = topoEtat();
-  const lieux = new Map(d.topo.lieux.map(l => [l.id, l]));
-  cible.appendChild(core.h(`<p class="info-txt">Explorateur d'objets — cliquez un élément pour le sélectionner ; un arrêt géolocalisé recentre la carte.</p>`));
+/* ----- CARTOUCHES DE FILTRE ----- */
 
-  if (t.filtres.reseaux) {
-    cible.appendChild(core.h(`<h4>🚌 Réseaux</h4>`));
-    if (!d.reseaux.length) cible.appendChild(core.h(`<p class="info-txt">Aucun réseau.</p>`));
-    d.reseaux.forEach(r => {
-      const b = core.h(`<div class="item-objet ${t.selection === r.id ? "sel" : ""}">${core.esc(r.nom)}</div>`);
-      b.onclick = () => { t.selection = r.id; core.rafraichir(); };
-      cible.appendChild(b);
-    });
-  }
-  if (t.filtres.lignes) {
-    cible.appendChild(core.h(`<h4>🚏 Lignes</h4>`));
-    if (!d.lignes.length) cible.appendChild(core.h(`<p class="info-txt">Aucune ligne.</p>`));
-    d.lignes.forEach(l => {
-      const b = core.h(`<div class="item-objet ${t.selection === l.id ? "sel" : ""}">${core.esc(l.abrev)} — ${core.esc(l.nom)}</div>`);
-      b.onclick = () => { t.selection = l.id; core.rafraichir(); };
-      cible.appendChild(b);
-    });
-  }
-  if (t.filtres.arrets) {
-    cible.appendChild(core.h(`<h4>📍 Arrêts</h4>`));
-    if (!d.topo.arrets.length) cible.appendChild(core.h(`<p class="info-txt">Aucun arrêt — cliquez « ➕ Créer un arrêt ».</p>`));
-    d.topo.arrets.forEach(a => {
-      const l = lieux.get(a.lieuId) || {};
-      const sansGps = (l.lat == null || l.lng == null);
-      const b = core.h(`<div class="item-objet ${t.selection === a.id ? "sel" : ""}">${core.esc(a.nom)} <small>(${core.esc(a.abrev)})</small>${sansGps ? ' <span class="etiquette alerte">⚠ GPS</span>' : ""}</div>`);
-      b.onclick = () => {
-        t.selection = a.id;
-        if (!sansGps) TopoCarte.centrer(l.lat, l.lng);
-        core.rafraichir();
-      };
-      cible.appendChild(b);
-    });
-  }
+function dessinerCartouches(zone, d, core, t) {
+  [["reseaux", "🚌 Réseaux"], ["lignes", "🚏 Lignes"], ["groupes", "🗂️ Groupes de lignes"]].forEach(([cle, label]) => {
+    const nb = t.filtres[cle].length;
+    const b = core.h(`<button class="cartouche ${nb ? "actif" : ""}" title="Filtrer — cliquez pour choisir">${label}${nb ? ` <span class="etiquette">${nb}</span>` : ""}</button>`);
+    b.onclick = () => { t.popover = (t.popover === cle) ? null : cle; core.rafraichir(); };
+    zone.appendChild(b);
+  });
+  if (t.popover) zone.appendChild(popoverFiltre(d, core, t, t.popover));
 }
 
-/* Fenêtre de création d'arrêt (modale, même famille que les lignes V1).
-   Par défaut : nouveau lieu automatique (même nom, mêmes coordonnées).
-   On peut aussi rattacher l'arrêt à un lieu existant dans la liste. */
-function formulaireArret(d, core, lat, lng) {
+/* Items d'une cartouche, déjà restreints par la cascade. */
+function itemsFiltre(d, t, cle) {
+  if (cle === "reseaux") return d.reseaux.map(r => ({ cle: r.id, label: r.nom }));
+  if (cle === "lignes") return lignesAffichables(d, t).map(l => ({ cle: l.id, label: l.abrev + " — " + l.nom }));
+  return groupesAffichables(d, t).map(g => ({ cle: g, label: g }));
+}
+
+/* La liste déroulante d'une cartouche : recherche + cases à cocher
+   multiples + « Tout afficher ». */
+function popoverFiltre(d, core, t, cle) {
+  const f = t.filtres;
+  const boite = core.h(`<div class="cartouche-pop">
+    <input id="cp-q" placeholder="🔎 Rechercher…" style="width:100%">
+    <div class="cp-liste" id="cp-liste"></div>
+    <div class="actions"><button type="button" class="b-blanc" id="cp-tous">Tout afficher</button>
+    <button type="button" class="b-bleu" id="cp-ok">Fermer</button></div>
+  </div>`);
+
+  const dessinerListe = (q) => {
+    const zoneListe = boite.querySelector("#cp-liste");
+    zoneListe.replaceChildren();
+    const q2 = String(q || "").toLowerCase();
+    const items = itemsFiltre(d, t, cle).filter(it => it.label.toLowerCase().includes(q2));
+    if (!items.length) { zoneListe.appendChild(core.h(`<p class="info-txt">Aucun résultat.</p>`)); return; }
+    items.forEach(it => {
+      const coche = core.h(`<label class="item-coche"><input type="checkbox" ${f[cle].includes(it.cle) ? "checked" : ""}> ${core.esc(it.label)}</label>`);
+      coche.querySelector("input").onchange = (ev) => {
+        if (ev.target.checked) { if (!f[cle].includes(it.cle)) f[cle].push(it.cle); }
+        else f[cle] = f[cle].filter(x => x !== it.cle);
+        harmoniserFiltres(d, t);   // retire les sélections devenues hors cascade
+        core.rafraichir();
+      };
+      zoneListe.appendChild(coche);
+    });
+  };
+
+  boite.querySelector("#cp-q").oninput = (ev) => dessinerListe(ev.target.value);
+  boite.querySelector("#cp-tous").onclick = () => { f[cle] = []; harmoniserFiltres(d, t); core.rafraichir(); };
+  boite.querySelector("#cp-ok").onclick = () => { t.popover = null; core.rafraichir(); };
+  dessinerListe("");
+  return boite;
+}
+
+/* ----- BANDE DES BOUTONS DE LA CARTE ----- */
+
+function dessinerBande(bande, d, core, t) {
+  const bCreer = core.h(`<button class="onglet ${t.creation ? "arme" : ""}" title="Armer, puis chaque clic sur la carte crée un arrêt">➕ Créer un arrêt</button>`);
+  bCreer.onclick = () => {
+    t.creation = !t.creation;                       // change de couleur (classe .arme)
+    if (t.creation && !TopoCarte.dispo()) formulaireArret(d, core, null, null);   // repli sans carte
+    core.rafraichir();
+  };
+  bande.appendChild(bCreer);
+  /* — les boutons suivants (chemins, imports…) s'inséreront ici — */
+  const bReglages = core.h(`<button class="onglet" title="Paramétrage de la carte">⚙</button>`);
+  bReglages.onclick = () => popupReglages(d, core);
+  bande.appendChild(bReglages);
+}
+
+/* ----- EXPLORATEUR D'OBJETS (gauche) ----- */
+
+function dessinerExplorateur(cible, d, core) {
   const t = topoEtat();
+  const f = t.filtres;
+  const lieux = new Map(d.topo.lieux.map(l => [l.id, l]));
+  cible.appendChild(core.h(`<p class="info-txt">Explorateur — les objets exclus par les cartouches sont grisés ; cliquer un arrêt géolocalisé recentre la carte.</p>`));
+
+  cible.appendChild(core.h(`<h4>🚌 Réseaux</h4>`));
+  if (!d.reseaux.length) cible.appendChild(core.h(`<p class="info-txt">Aucun réseau.</p>`));
+  d.reseaux.forEach(r => {
+    const exclus = f.reseaux.length && !f.reseaux.includes(r.id);
+    const b = core.h(`<div class="item-objet ${exclus ? "grise" : ""} ${t.selection === r.id ? "sel" : ""}">${core.esc(r.nom)}</div>`);
+    b.onclick = () => { t.selection = r.id; core.rafraichir(); };
+    cible.appendChild(b);
+  });
+
+  cible.appendChild(core.h(`<h4>🚏 Lignes</h4>`));
+  if (!d.lignes.length) cible.appendChild(core.h(`<p class="info-txt">Aucune ligne.</p>`));
+  d.lignes.forEach(l => {
+    const exclus = (f.reseaux.length && !f.reseaux.includes(l.reseauId))
+      || (f.groupes.length && !f.groupes.includes(l.groupe))
+      || (f.lignes.length && !f.lignes.includes(l.id));
+    const b = core.h(`<div class="item-objet ${exclus ? "grise" : ""} ${t.selection === l.id ? "sel" : ""}">${core.esc(l.abrev)} — ${core.esc(l.nom)}</div>`);
+    b.onclick = () => { t.selection = l.id; core.rafraichir(); };
+    cible.appendChild(b);
+  });
+
+  cible.appendChild(core.h(`<h4>📍 Arrêts</h4>`));
+  if (!d.topo.arrets.length) cible.appendChild(core.h(`<p class="info-txt">Aucun arrêt — armez « ➕ Créer un arrêt » puis cliquez sur la carte.</p>`));
+  d.topo.arrets.forEach(a => {
+    const l = lieux.get(a.lieuId) || {};
+    const sansGps = (l.lat == null || l.lng == null);
+    const b = core.h(`<div class="item-objet ${t.selection === a.id ? "sel" : ""}">${core.esc(a.nom)} <small>(${core.esc(a.abrev)})</small>${sansGps ? ' <span class="etiquette alerte">⚠ GPS</span>' : ""}</div>`);
+    b.onclick = () => {
+      t.selection = a.id;
+      if (!sansGps) TopoCarte.centrer(l.lat, l.lng);
+      core.rafraichir();
+    };
+    cible.appendChild(b);
+  });
+}
+
+/* ----- FENÊTRE DE CRÉATION D'ARRÊT ----- */
+
+function formulaireArret(d, core, lat, lng) {
   const lieux = d.topo.lieux.map(l =>
     `<option value="${l.id}">${core.esc(l.nom)} (${core.esc(l.abrev)})</option>`).join("");
   const f = core.h(`<form class="panneau-travail">
@@ -187,8 +274,8 @@ function formulaireArret(d, core, lat, lng) {
   core.modal(f);
 }
 
-/* Pop-up ⚙ : paramétrage affectant directement la carte — fond de carte,
-   couches affichées, étiquettes à côté des objets. */
+/* ----- POP-UP ⚙ DE PARAMÉTRAGE DE LA CARTE ----- */
+
 function popupReglages(d, core) {
   const t = topoEtat();
   const r = t.reglages;
