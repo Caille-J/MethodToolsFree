@@ -2476,7 +2476,7 @@ function lancerTests() {
     test("Topo : schéma versionné + lieu créé, doublon d'abréviation refusé", () => {
       const d = Noyau.instanceNeuve();
       const t = Topo.init(d);
-      assert(t.version === "topo-1" && Array.isArray(t.lieux), "d.topo doit exister au schéma topo-1");
+      assert(t.version === "topo-2" && Array.isArray(t.lieux), "d.topo doit exister au schéma topo-2");
       const r = Topo.creerLieu(d, { nom: "Place de la République", abrev: "REP" });
       assert(r.ok, "La création d'un lieu valide doit réussir : " + (r.erreurs || []).join(" "));
       assert(t.lieux.length === 1 && t.lieux[0].id[0] === "t", "Le lieu doit être stocké avec un id topo");
