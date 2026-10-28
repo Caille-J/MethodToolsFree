@@ -764,6 +764,13 @@ function boutonSupprimer(texte, onConfirme) {
    (utilisée par l'import : le tableau doit tenir en largeur). */
 function modal(contenu, large) {
   const fond = h(`<div class="modal-fond"><div class="modal"></div></div>`);
+  /* V2.5 (demande de Jules) : TOUTES les fenêtres pop-up ont les
+     dimensions de la fenêtre « Modifier une ligne » — les 3/4 de la
+     largeur du tableau de travail affiché, au moins 560 px. */
+  const panneau = document.querySelector(".panneau-travail");
+  const largTableau = panneau && panneau.getBoundingClientRect ? panneau.getBoundingClientRect().width : 900;
+  fond.firstChild.style.maxWidth = "none";
+  fond.firstChild.style.width = Math.max(560, Math.round(largTableau * 0.75)) + "px";
   if (large) { fond.firstChild.style.maxWidth = "95vw"; fond.firstChild.style.width = "95%"; }
   fond.firstChild.appendChild(contenu);
   fond.onclick = (e) => { if (e.target === fond) fond.remove(); };
@@ -1016,7 +1023,7 @@ function vueEspaceTravail(u) {
       </span>
     </div>
     <div class="conteneur" id="haut-travail"></div>
-    <div class="conteneur" id="contenu" ${App.vue === "lignes" || App.vue === "arrets" || App.vue === "lieux" || App.vue === "vue" || (App.vue || "").indexOf("mod:") === 0 ? 'style="width:calc(100% - 32px);max-width:none;"' : ""}></div>
+    <div class="conteneur" id="contenu" ${App.vue === "lignes" || App.vue === "reseaux" || App.vue === "contrats" || App.vue === "arrets" || App.vue === "lieux" || (App.vue || "").indexOf("mod:") === 0 ? 'style="width:calc(100% - 32px);max-width:none;"' : ""}></div>
   </div>`);
   racine.querySelector("#retour-accueil").onclick = () => { App.instanceOuverte = null; App.colonnes = null; rafraichir(); };
   const haut = racine.querySelector("#haut-travail");
@@ -1029,10 +1036,10 @@ function vueEspaceTravail(u) {
     if (!App.resumePlié) haut.appendChild(resume);
   }
   const bande = racine.querySelector("#bande-modules");
-  const dansDef = (App.vue === "lignes" || App.vue === "vue" || App.vue === "arrets" || App.vue === "lieux");
+  const dansDef = (App.vue === "lignes" || App.vue === "reseaux" || App.vue === "contrats" || App.vue === "arrets" || App.vue === "lieux");
   /* 1er module de la bande : Définition réseau (lignes + réseaux & contrats). */
   const bDef = h(`<button class="onglet ${dansDef ? "actif" : ""}" title="Lignes, réseaux et contrats">🚏 Définition réseau</button>`);
-  bDef.onclick = () => { if (App.vue !== "lignes" && App.vue !== "vue" && App.vue !== "arrets" && App.vue !== "lieux") App.vue = "lignes"; rafraichir(); };
+  bDef.onclick = () => { if (App.vue !== "lignes" && App.vue !== "reseaux" && App.vue !== "contrats" && App.vue !== "arrets" && App.vue !== "lieux") App.vue = "lignes"; rafraichir(); };
   bande.appendChild(bDef);
   /* Puis chaque module enregistré via la fiche (ex. 🗺️ Topologie) : la bande
      s'agrandit au fil et à mesure des modules. Un module absent ou cassé ne
@@ -1052,13 +1059,25 @@ function vueEspaceTravail(u) {
      des lignes et la vue réseaux & contrats (rien n'est perdu). */
   if (dansDef) {
     const sous = h(`<div class="onglets sous-onglets"></div>`);
-    [["lignes", "🚏 Toutes les lignes"], ["arrets", "📍 Arrêts"], ["lieux", "🚉 Lieux"], ["vue", "🚌 Réseaux & contrats"]].forEach(([cle, label]) => {
+    [["reseaux", "🚌 Réseaux"], ["contrats", "📄 Contrats"], ["lignes", "🚏 Lignes"], ["arrets", "📍 Arrêts"], ["lieux", "🚉 Lieux"]].forEach(([cle, label]) => {
       const b = h(`<button class="onglet ${App.vue === cle ? "actif" : ""}">${label}</button>`);
       b.onclick = () => { App.vue = cle; rafraichir(); };
       sous.appendChild(b);
     });
     contenu.appendChild(sous);
-    if (App.vue === "arrets") {
+    if (App.vue === "reseaux" || App.vue === "contrats" || App.vue === "vue") {
+      /* V2.5 (demande de Jules) : Réseaux et Contrats ont CHACUN leur
+         onglet, avec la même disposition que le tableau des lignes
+         (⚙ Colonnes, 📋 Copier, 📥 Importer, recherche multi-critères,
+         bouton « + Créer » au-dessus à gauche du tableau). L'ancienne
+         vue fusionnée « vue » est redirigée vers Réseaux. */
+      if (App.vue === "vue") App.vue = "reseaux";
+      try { contenu.appendChild(App.vue === "reseaux" ? vueReseaux() : vueContrats()); }
+      catch (e) {
+        afficherErreur("Vue " + (App.vue === "reseaux" ? "Réseaux" : "Contrats") + " : " + e.message);
+        contenu.appendChild(h(`<p class="erreur">La vue a échoué : ${esc(e.message)}</p>`));
+      }
+    } else if (App.vue === "arrets") {
       try { contenu.appendChild(Topo.vueArrets(dOng, Hastus.core)); }
       catch (e) {
         afficherErreur("Vue Arrêts : " + e.message);
@@ -1868,6 +1887,359 @@ function vueReseauxContrats() {
       liste.appendChild(carte);
     });
   }
+  return racine;
+}
+
+/* ============================================================
+   V2.5 — TABLEAUX DES RÉSEAUX ET DES CONTRATS (demande de Jules) :
+   chacun a son onglet, avec EXACTEMENT la disposition du tableau
+   « Toutes les lignes » : ⚙ Colonnes (mémorisé par instance),
+   📋 Copier (Excel), 📥 Importer, barre de recherche à choix
+   multiples, bouton « + Créer » au-dessus à gauche du tableau,
+   ✎/🔎/🗑 par ligne, double-clic = fiche.
+   ============================================================ */
+
+const RESEAU_COLONNES = [
+  { cle: "id", label: "ID unique", fixe: true },
+  { cle: "nom", label: "Nom" },
+  { cle: "validiteDebut", label: "Début validité" },
+  { cle: "validiteFin", label: "Fin validité" },
+  { cle: "nbLignes", label: "Lignes" },
+  { cle: "nbContrats", label: "Contrats" }
+];
+
+function vueReseaux() {
+  const d = BD.donneesInstance(App.instanceOuverte.id);
+  const prefCle = "hastus_colonnes_reseaux_" + App.instanceOuverte.id;
+  if (!App.barreReseaux) App.barreReseaux = { q: "", validite: "all", contrat: "all" };
+  const b = App.barreReseaux;
+  let colonnesChoisies;
+  try {
+    const p = JSON.parse(localStorage.getItem(prefCle) || "null");
+    colonnesChoisies = Array.isArray(p) && p.length ? p : ["nom", "validiteDebut", "validiteFin", "nbLignes", "nbContrats"];
+  } catch (e) { colonnesChoisies = ["nom", "validiteDebut", "validiteFin", "nbLignes", "nbContrats"]; }
+  const q = String(b.q || "").trim().toLowerCase();
+  const aujourdhui = new Date().toISOString().slice(0, 10);
+  const nbLignes = (id) => d.lignes.filter(l => l.reseauId === id).length;
+  const contratsDe = (id) => d.contrats.filter(c => (c.reseaux || []).includes(id));
+  const visibles = d.reseaux.filter(r => {
+    if (q && !(r.nom + " " + (r.validiteDebut || "") + " " + (r.validiteFin || "")).toLowerCase().includes(q)) return false;
+    if (b.validite === "cours" && !(r.validiteDebut <= aujourdhui && (!r.validiteFin || r.validiteFin >= aujourdhui))) return false;
+    if (b.validite === "avenir" && !(r.validiteDebut > aujourdhui)) return false;
+    if (b.validite === "expire" && !(r.validiteFin && r.validiteFin < aujourdhui)) return false;
+    if (b.contrat === "oui" && contratsDe(r.id).length === 0) return false;
+    if (b.contrat === "non" && contratsDe(r.id).length > 0) return false;
+    return true;
+  });
+  const cles = ["id", ...colonnesChoisies];
+  const cols = cles.map(cle => RESEAU_COLONNES.find(c => c.cle === cle)).filter(Boolean);
+  const valCol = (r, cle) => cle === "nbLignes" ? nbLignes(r.id) : cle === "nbContrats" ? contratsDe(r.id).length : (r[cle] || "—");
+
+  const racine = h(`<div class="carte panneau-travail tableau-page">
+    <div class="barre-outils">
+      <div class="titre">Tableau de gestion des réseaux</div>
+      <div class="actions">
+        <span class="menu-col"><button id="rs-col">⚙ Colonnes</button></span>
+        <button id="rs-copy">📋 Copier (Excel)</button>
+        <button id="rs-masse">📥 Importer</button>
+      </div>
+    </div>
+    <div class="barre-filtres" style="grid-template-columns:2fr 1fr 1fr;">
+      <div class="champ"><label>Recherche</label>
+        <input id="rs-q" value="${esc(b.q)}" placeholder="Nom, date de validité…"/></div>
+      <div class="champ"><label>Validité</label>
+        <select id="rs-val">${[["all", "Toutes"], ["cours", "En cours"], ["avenir", "À venir"], ["expire", "Expirées"]]
+          .map(([v, l]) => `<option value="${v}" ${b.validite === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+      <div class="champ"><label>Contrats liés</label>
+        <select id="rs-ctr">${[["all", "Tous"], ["oui", "Avec contrat"], ["non", "Sans contrat"]]
+          .map(([v, l]) => `<option value="${v}" ${b.contrat === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+    </div>
+    <div class="inline-flex" style="justify-content:space-between;width:100%;margin-bottom:10px;">
+      <button id="rs-nouv" class="b-bleu">+ Créer un réseau</button>
+      <button id="rs-raz" class="petit">Réinitialiser les filtres</button>
+    </div>
+    <div class="enveloppe-table"><table>
+      <thead><tr>${cols.map(c => `<th>${esc(c.label)}</th>`).join("")}<th style="text-align:right;">Actions</th></tr></thead>
+      <tbody id="rs-corps"></tbody>
+    </table></div>
+    <p class="info-txt" id="rs-compte" style="margin-top:8px;"></p>
+  </div>`);
+
+  racine.querySelector("#rs-q").oninput = (e) => { b.q = e.target.value; rafraichir(); const c = document.getElementById("rs-q"); if (c) { c.focus(); c.setSelectionRange(c.value.length, c.value.length); } };
+  racine.querySelector("#rs-val").onchange = (e) => { b.validite = e.target.value; rafraichir(); };
+  racine.querySelector("#rs-ctr").onchange = (e) => { b.contrat = e.target.value; rafraichir(); };
+  racine.querySelector("#rs-nouv").onclick = () => modalReseau(null);
+  racine.querySelector("#rs-raz").onclick = () => { App.barreReseaux = { q: "", validite: "all", contrat: "all" }; rafraichir(); };
+
+  const corps = racine.querySelector("#rs-corps");
+  corps.innerHTML = visibles.map(r =>
+    `<tr data-id="${esc(r.id)}">` + cols.map(c => `<td>${esc(String(valCol(r, c.cle)))}</td>`).join("")
+    + `<td style="text-align:right;"><button class="ico" data-act="mod" data-id="${esc(r.id)}" title="Modifier">✎</button><button class="ico" data-act="use" data-id="${esc(r.id)}" title="Où est-il utilisé ?">🔎</button><button class="ico suppr" data-act="sup" data-id="${esc(r.id)}" title="Supprimer">🗑</button></td></tr>`
+  ).join("") + (!visibles.length ? `<tr><td colspan="${cols.length + 1}" style="text-align:center;color:#64748b;">${d.reseaux.length ? "Aucun réseau ne correspond aux filtres." : "Aucun réseau — cliquez « + Créer un réseau »."}</td></tr>` : "");
+  corps.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-act]");
+    if (!btn) return;
+    const id = btn.dataset.id;
+    if (btn.dataset.act === "mod") return modalReseau(id);
+    if (btn.dataset.act === "use") {
+      const r = d.reseaux.find(x => x.id === id);
+      return modalUsages(r.nom, () => {
+        const u = Noyau.usagesReseau(d, id);
+        return [
+          ...u.lignes.map(l => ({ label: () => `Ligne <b>${esc(l.abrev)}</b> — ${esc(l.nom)}`, modifier: () => modalLigne(l.id), supprimer: () => { d.lignes = d.lignes.filter(x => x.id !== l.id); } })),
+          ...u.contrats.map(c => ({ label: () => `Contrat <b>${esc(c.nom)}</b>`, modifier: () => modalContrat(c.id), supprimer: () => { d.contrats = d.contrats.filter(x => x.id !== c.id); } }))
+        ];
+      });
+    }
+    if (btn.classList.contains("armed")) {
+      const u = Noyau.usagesReseau(d, id);
+      if (u.lignes.length || u.contrats.length) { alert(`Impossible : réseau utilisé par ${u.lignes.length} ligne(s) et ${u.contrats.length} contrat(s).`); return; }
+      d.reseaux = d.reseaux.filter(x => x.id !== id); BD.sauver(); rafraichir(); return;
+    }
+    btn.classList.add("armed"); btn.textContent = "Confirmer ?";
+    setTimeout(() => { if (btn.isConnected) { btn.classList.remove("armed"); btn.textContent = "🗑"; } }, 3000);
+  });
+  corps.addEventListener("dblclick", (e) => { if (e.target.closest("button")) return; const tr = e.target.closest("tr"); if (tr && tr.dataset.id) modalReseau(tr.dataset.id); });
+  racine.querySelector("#rs-compte").textContent = `${visibles.length} réseau(x) affiché(s) sur ${d.reseaux.length}`;
+
+  /* ⚙ Colonnes : même mécanique que les tableaux lignes/arrêts. */
+  racine.querySelector("#rs-col").onclick = () => {
+    const ancien = racine.querySelector(".panneau");
+    if (ancien) { ancien.remove(); return; }
+    let travail = [...colonnesChoisies];
+    RESEAU_COLONNES.forEach(c => { if (!c.fixe && !travail.includes(c.cle)) travail.push(c.cle); });
+    const cochees = new Set(colonnesChoisies);
+    const pan = h(`<div class="panneau" style="width:320px;">
+      <b style="font-size:13px;">Colonnes affichées</b>
+      <p class="info-txt" style="margin:2px 0 6px;">Cocher/décocher · « Appliquer » enregistre.</p>
+      <div id="rsp-liste" style="max-height:240px;overflow-y:auto;"></div>
+      <div class="ligne-boutons" style="margin:6px 0 0;">
+        <button id="rsp-ann">✕ Fermer</button><button id="rsp-ok" class="b-bleu">Appliquer</button>
+      </div>
+    </div>`);
+    const dessiner = () => {
+      const box = pan.querySelector("#rsp-liste");
+      box.innerHTML = "";
+      travail.forEach(cle => {
+        const col = RESEAU_COLONNES.find(c => c.cle === cle);
+        const l = h(`<label class="p-ligne"><input type="checkbox" ${cochees.has(cle) || col.fixe ? "checked" : ""} ${col.fixe ? "disabled" : ""}/> <span>${esc(col.label)}${col.fixe ? ' <span class="etiquette">fixe</span>' : ""}</span></label>`);
+        l.querySelector("input").onchange = (ev) => ev.target.checked ? cochees.add(cle) : cochees.delete(cle);
+        box.appendChild(l);
+      });
+    };
+    dessiner();
+    pan.querySelector("#rsp-ann").onclick = () => pan.remove();
+    pan.querySelector("#rsp-ok").onclick = () => {
+      colonnesChoisies = travail.filter(cle => cochees.has(cle));
+      localStorage.setItem(prefCle, JSON.stringify(colonnesChoisies));
+      rafraichir();
+    };
+    racine.querySelector("#rs-col").parentElement.appendChild(pan);
+  };
+
+  /* 📋 Copier (Excel). */
+  racine.querySelector("#rs-copy").onclick = () => {
+    const tsv = ["Nom\tDébut\tFin\tLignes\tContrats"].concat(
+      d.reseaux.map(r => [r.nom, r.validiteDebut || "", r.validiteFin || "",
+        d.lignes.filter(l => l.reseauId === r.id).map(l => l.abrev).join(" "), contratsDe(r.id).map(c => c.nom).join(" | ")].join("\t"))
+    ).join("\n");
+    navigator.clipboard?.writeText(tsv);
+    alert(`Les ${d.reseaux.length} réseau(x) sont dans le presse-papiers : collez-les dans Excel avec Ctrl+V.`);
+  };
+
+  /* 📥 Importer : TSV/CSV « Nom* — Début — Fin » ; clé = nom unique. */
+  racine.querySelector("#rs-masse").onclick = () => {
+    const form = h(`<div>
+      <h2>Importer des réseaux</h2>
+      <p class="info-txt">Colonnes : <b>Nom* — Début (AAAA-MM-JJ) — Fin (AAAA-MM-JJ)</b> (* = obligatoire, nom unique).</p>
+      <p class="info-txt">Un réseau portant déjà ce nom est mis à jour (validité) ; sinon il est créé.</p>
+      <label><input type="file" id="rs-fichier" accept=".csv,.tsv,.txt"></label>
+      <label>ou collez ici :<br><textarea id="rs-texte" rows="6" style="width:100%;" placeholder="Réseau Nord&#9;2024-01-01&#9;2099-12-31"></textarea></label>
+      <div class="ligne-boutons"><button id="rs-ann" class="b-blanc">Annuler</button><button id="rs-go" class="b-bleu">Importer</button></div>
+    </div>`);
+    modal(form);
+    form.querySelector("#rs-ann").onclick = () => form.closest(".modal-fond").remove();
+    form.querySelector("#rs-go").onclick = () => {
+      const texte = form.querySelector("#rs-texte").value;
+      if (!texte.trim()) { alert("Collez des lignes (ou utilisez le fichier ci-dessus)."); return; }
+      let crees = 0, maj = 0, ignorees = 0;
+      texte.split(/\r?\n/).map(x => x.trim()).filter(Boolean).forEach(ligneTxt => {
+        const c = ligneTxt.split(/\t|;/).map(x => (x || "").trim());
+        const nom = c[0], deb = c[1] || "", fin = c[2] || "";
+        if (!nom) { ignorees++; return; }
+        const existant = d.reseaux.find(r => r.nom.toLowerCase() === nom.toLowerCase());
+        if (existant) { existant.validiteDebut = deb; existant.validiteFin = fin; maj++; }
+        else { d.reseaux.push({ id: Noyau.nouvelId(d), nom, validiteDebut: deb, validiteFin: fin }); crees++; }
+      });
+      BD.sauver(); form.closest(".modal-fond").remove(); rafraichir();
+      alert(`Import terminé : ${crees} création(s), ${maj} mise(s) à jour, ${ignorees} ignorée(s).`);
+    };
+  };
+
+  return racine;
+}
+
+const CONTRAT_COLONNES = [
+  { cle: "id", label: "ID unique", fixe: true },
+  { cle: "nom", label: "Nom" },
+  { cle: "reseaux", label: "Réseaux concernés" },
+  { cle: "nbLignes", label: "Lignes" }
+];
+
+function vueContrats() {
+  const d = BD.donneesInstance(App.instanceOuverte.id);
+  const prefCle = "hastus_colonnes_contrats_" + App.instanceOuverte.id;
+  if (!App.barreContrats) App.barreContrats = { q: "", reseau: "all" };
+  const b = App.barreContrats;
+  let colonnesChoisies;
+  try {
+    const p = JSON.parse(localStorage.getItem(prefCle) || "null");
+    colonnesChoisies = Array.isArray(p) && p.length ? p : ["nom", "reseaux", "nbLignes"];
+  } catch (e) { colonnesChoisies = ["nom", "reseaux", "nbLignes"]; }
+  const q = String(b.q || "").trim().toLowerCase();
+  const reseauxDe = (c) => d.reseaux.filter(r => (c.reseaux || []).includes(r.id));
+  const visibles = d.contrats.filter(c => {
+    const txt = (c.nom + " " + reseauxDe(c).map(r => r.nom).join(" ")).toLowerCase();
+    if (q && !txt.includes(q)) return false;
+    if (b.reseau !== "all" && !(c.reseaux || []).includes(b.reseau)) return false;
+    return true;
+  });
+  const cles = ["id", ...colonnesChoisies];
+  const cols = cles.map(cle => CONTRAT_COLONNES.find(c => c.cle === cle)).filter(Boolean);
+  const valCol = (c, cle) => cle === "reseaux" ? (reseauxDe(c).map(r => r.nom).join(", ") || "—") : cle === "nbLignes" ? d.lignes.filter(l => l.contratId === c.id).length : (c[cle] || "—");
+
+  const racine = h(`<div class="carte panneau-travail tableau-page">
+    <div class="barre-outils">
+      <div class="titre">Tableau de gestion des contrats</div>
+      <div class="actions">
+        <span class="menu-col"><button id="ct-col">⚙ Colonnes</button></span>
+        <button id="ct-copy">📋 Copier (Excel)</button>
+        <button id="ct-masse">📥 Importer</button>
+      </div>
+    </div>
+    <div class="barre-filtres" style="grid-template-columns:3fr 1fr;">
+      <div class="champ"><label>Recherche</label>
+        <input id="ct-q" value="${esc(b.q)}" placeholder="Nom, réseau concerné…"/></div>
+      <div class="champ"><label>Réseau</label>
+        <select id="ct-res"><option value="all">Tous</option>
+          ${d.reseaux.map(r => `<option value="${esc(r.id)}" ${b.reseau === r.id ? "selected" : ""}>${esc(r.nom)}</option>`).join("")}</select></div>
+    </div>
+    <div class="inline-flex" style="justify-content:space-between;width:100%;margin-bottom:10px;">
+      <button id="ct-nouv" class="b-bleu">+ Créer un contrat</button>
+      <button id="ct-raz" class="petit">Réinitialiser les filtres</button>
+    </div>
+    <div class="enveloppe-table"><table>
+      <thead><tr>${cols.map(c => `<th>${esc(c.label)}</th>`).join("")}<th style="text-align:right;">Actions</th></tr></thead>
+      <tbody id="ct-corps"></tbody>
+    </table></div>
+    <p class="info-txt" id="ct-compte" style="margin-top:8px;"></p>
+  </div>`);
+
+  racine.querySelector("#ct-q").oninput = (e) => { b.q = e.target.value; rafraichir(); const c = document.getElementById("ct-q"); if (c) { c.focus(); c.setSelectionRange(c.value.length, c.value.length); } };
+  racine.querySelector("#ct-res").onchange = (e) => { b.reseau = e.target.value; rafraichir(); };
+  racine.querySelector("#ct-nouv").onclick = () => modalContrat(null);
+  racine.querySelector("#ct-raz").onclick = () => { App.barreContrats = { q: "", reseau: "all" }; rafraichir(); };
+
+  const corps = racine.querySelector("#ct-corps");
+  corps.innerHTML = visibles.map(c =>
+    `<tr data-id="${esc(c.id)}">` + cols.map(col => `<td>${esc(String(valCol(c, col.cle)))}</td>`).join("")
+    + `<td style="text-align:right;"><button class="ico" data-act="mod" data-id="${esc(c.id)}" title="Modifier">✎</button><button class="ico" data-act="use" data-id="${esc(c.id)}" title="Où est-il utilisé ?">🔎</button><button class="ico suppr" data-act="sup" data-id="${esc(c.id)}" title="Supprimer">🗑</button></td></tr>`
+  ).join("") + (!visibles.length ? `<tr><td colspan="${cols.length + 1}" style="text-align:center;color:#64748b;">${d.contrats.length ? "Aucun contrat ne correspond aux filtres." : "Aucun contrat — cliquez « + Créer un contrat »."}</td></tr>` : "");
+  corps.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-act]");
+    if (!btn) return;
+    const id = btn.dataset.id;
+    if (btn.dataset.act === "mod") return modalContrat(id);
+    if (btn.dataset.act === "use") {
+      const c = d.contrats.find(x => x.id === id);
+      return modalUsages(c.nom, () =>
+        Noyau.usagesContrat(d, id).lignes.map(l => ({ label: () => `Ligne <b>${esc(l.abrev)}</b> — ${esc(l.nom)}`, modifier: () => modalLigne(l.id), supprimer: () => { d.lignes = d.lignes.filter(x => x.id !== l.id); } })));
+    }
+    if (btn.classList.contains("armed")) {
+      const u = Noyau.usagesContrat(d, id);
+      if (u.lignes.length) { alert(`Impossible : contrat utilisé par ${u.lignes.length} ligne(s).`); return; }
+      d.contrats = d.contrats.filter(x => x.id !== id); BD.sauver(); rafraichir(); return;
+    }
+    btn.classList.add("armed"); btn.textContent = "Confirmer ?";
+    setTimeout(() => { if (btn.isConnected) { btn.classList.remove("armed"); btn.textContent = "🗑"; } }, 3000);
+  });
+  corps.addEventListener("dblclick", (e) => { if (e.target.closest("button")) return; const tr = e.target.closest("tr"); if (tr && tr.dataset.id) modalContrat(tr.dataset.id); });
+  racine.querySelector("#ct-compte").textContent = `${visibles.length} contrat(s) affiché(s) sur ${d.contrats.length}`;
+
+  racine.querySelector("#ct-col").onclick = () => {
+    const ancien = racine.querySelector(".panneau");
+    if (ancien) { ancien.remove(); return; }
+    let travail = [...colonnesChoisies];
+    CONTRAT_COLONNES.forEach(c => { if (!c.fixe && !travail.includes(c.cle)) travail.push(c.cle); });
+    const cochees = new Set(colonnesChoisies);
+    const pan = h(`<div class="panneau" style="width:320px;">
+      <b style="font-size:13px;">Colonnes affichées</b>
+      <p class="info-txt" style="margin:2px 0 6px;">Cocher/décocher · « Appliquer » enregistre.</p>
+      <div id="ctp-liste" style="max-height:240px;overflow-y:auto;"></div>
+      <div class="ligne-boutons" style="margin:6px 0 0;">
+        <button id="ctp-ann">✕ Fermer</button><button id="ctp-ok" class="b-bleu">Appliquer</button>
+      </div>
+    </div>`);
+    const dessiner = () => {
+      const box = pan.querySelector("#ctp-liste");
+      box.innerHTML = "";
+      travail.forEach(cle => {
+        const col = CONTRAT_COLONNES.find(c => c.cle === cle);
+        const l = h(`<label class="p-ligne"><input type="checkbox" ${cochees.has(cle) || col.fixe ? "checked" : ""} ${col.fixe ? "disabled" : ""}/> <span>${esc(col.label)}${col.fixe ? ' <span class="etiquette">fixe</span>' : ""}</span></label>`);
+        l.querySelector("input").onchange = (ev) => ev.target.checked ? cochees.add(cle) : cochees.delete(cle);
+        box.appendChild(l);
+      });
+    };
+    dessiner();
+    pan.querySelector("#ctp-ann").onclick = () => pan.remove();
+    pan.querySelector("#ctp-ok").onclick = () => {
+      colonnesChoisies = travail.filter(cle => cochees.has(cle));
+      localStorage.setItem(prefCle, JSON.stringify(colonnesChoisies));
+      rafraichir();
+    };
+    racine.querySelector("#ct-col").parentElement.appendChild(pan);
+  };
+
+  racine.querySelector("#ct-copy").onclick = () => {
+    const tsv = ["Nom\tRéseaux\tLignes"].concat(
+      d.contrats.map(c => [c.nom, reseauxDe(c).map(r => r.nom).join(" | "),
+        d.lignes.filter(l => l.contratId === c.id).map(l => l.abrev).join(" ")].join("\t"))
+    ).join("\n");
+    navigator.clipboard?.writeText(tsv);
+    alert(`Les ${d.contrats.length} contrat(s) sont dans le presse-papiers : collez-les dans Excel avec Ctrl+V.`);
+  };
+
+  racine.querySelector("#ct-masse").onclick = () => {
+    const form = h(`<div>
+      <h2>Importer des contrats</h2>
+      <p class="info-txt">Colonnes : <b>Nom* — Réseaux (noms séparés par « | »)</b> (* = obligatoire, nom unique).</p>
+      <p class="info-txt">Un contrat portant déjà ce nom est mis à jour (réseaux concernés) ; sinon il est créé.</p>
+      <label><input type="file" id="ct-fichier" accept=".csv,.tsv,.txt"></label>
+      <label>ou collez ici :<br><textarea id="ct-texte" rows="6" style="width:100%;" placeholder="Exploitation Sud&#9;Réseau Sud | Réseau Nord"></textarea></label>
+      <div class="ligne-boutons"><button id="ct-ann" class="b-blanc">Annuler</button><button id="ct-go" class="b-bleu">Importer</button></div>
+    </div>`);
+    modal(form);
+    form.querySelector("#ct-ann").onclick = () => form.closest(".modal-fond").remove();
+    form.querySelector("#ct-go").onclick = () => {
+      const texte = form.querySelector("#ct-texte").value;
+      if (!texte.trim()) { alert("Collez des lignes (ou utilisez le fichier ci-dessus)."); return; }
+      let crees = 0, maj = 0, ignorees = 0;
+      texte.split(/\r?\n/).map(x => x.trim()).filter(Boolean).forEach(ligneTxt => {
+        const c = ligneTxt.split(/\t|;/).map(x => (x || "").trim());
+        const nom = c[0];
+        if (!nom) { ignorees++; return; }
+        const nomsReseaux = (c[1] || "").split("|").map(x => x.trim()).filter(Boolean);
+        const ids = nomsReseaux.map(n => (d.reseaux.find(r => r.nom.toLowerCase() === n.toLowerCase()) || {}).id).filter(Boolean);
+        if (nomsReseaux.length && ids.length !== nomsReseaux.length) { ignorees++; return; }
+        const existant = d.contrats.find(x => x.nom.toLowerCase() === nom.toLowerCase());
+        if (existant) { existant.reseaux = ids; maj++; }
+        else { d.contrats.push({ id: Noyau.nouvelId(d), nom, reseaux: ids }); crees++; }
+      });
+      BD.sauver(); form.closest(".modal-fond").remove(); rafraichir();
+      alert(`Import terminé : ${crees} création(s), ${maj} mise(s) à jour, ${ignorees} ignorée(s).`);
+    };
+  };
+
   return racine;
 }
 
@@ -2700,6 +3072,7 @@ rafraichir();
 <script src="modules/topo/manifeste.js"></script>
 </body>
 </html>
+
 
 
 

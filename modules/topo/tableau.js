@@ -43,13 +43,18 @@ window.Topo.vueArrets = (d, core) => {
     const p = JSON.parse(localStorage.getItem(prefCle) || "null");
     colonnesChoisies = Array.isArray(p) && p.length ? p : ["abrev", "nom", "lieu", "lat", "lng", "gps"];
   } catch (e) { colonnesChoisies = ["abrev", "nom", "lieu", "lat", "lng", "gps"]; }
-  if (!App.barreArrets) App.barreArrets = { q: "" };
+  if (!App.barreArrets) App.barreArrets = { q: "", lieu: "all", gps: "all" };
   const q = String(App.barreArrets.q || "").trim().toLowerCase();
 
-  /* Filtrage : recherche sur abréviation, nom et lieu. */
+  /* Filtrage : recherche (abréviation, nom, lieu) + CHOIX MULTIPLES (V2.5,
+     même disposition que le tableau des lignes) : lieu + état GPS. */
   const visibles = d.topo.arrets.filter(a => {
-    if (!q) return true;
-    return (a.abrev + " " + a.nom + " " + (lieuDe(a).nom || "")).toLowerCase().includes(q);
+    if (q && !((a.abrev || "") + " " + (a.nom || "") + " " + (lieuDe(a).nom || "")).toLowerCase().includes(q)) return false;
+    if (App.barreArrets.lieu !== "all" && a.lieuId !== App.barreArrets.lieu) return false;
+    const sansGps = (a.lat == null || a.lng == null);
+    if (App.barreArrets.gps === "oui" && sansGps) return false;
+    if (App.barreArrets.gps === "non" && !sansGps) return false;
+    return true;
   });
 
   const cles = ["id", ...colonnesChoisies];
@@ -62,13 +67,22 @@ window.Topo.vueArrets = (d, core) => {
         <span class="menu-col"><button id="ar-col">⚙ Colonnes</button></span>
         <button id="ar-copy">📋 Copier (Excel)</button>
         <button id="ar-masse">📥 Importer</button>
+        <button id="ar-exp" title="Paramétrage des exports GTFS / NeTEx">⚙ GTFS/NeTEx</button>
       </div>
     </div>
-    <div class="barre-filtres" style="grid-template-columns:2fr 1fr;">
+    <div class="barre-filtres" style="grid-template-columns:2fr 1fr 1fr;">
       <div class="champ"><label>Recherche</label>
         <input id="ar-q" value="${core.esc(App.barreArrets.q)}" placeholder="Abréviation, nom, lieu…"/></div>
-      <div class="champ"><label>&nbsp;</label>
-        <button id="ar-nouv" class="b-bleu" style="width:100%;">+ Créer un arrêt</button></div>
+      <div class="champ"><label>Lieu</label>
+        <select id="ar-lieu"><option value="all">Tous</option>
+          ${d.topo.lieux.map(l => `<option value="${core.esc(l.id)}" ${App.barreArrets.lieu === l.id ? "selected" : ""}>${core.esc(l.nom)}</option>`).join("")}</select></div>
+      <div class="champ"><label>GPS</label>
+        <select id="ar-gps">${[["all", "Tous"], ["oui", "Géolocalisés"], ["non", "À géolocaliser"]]
+          .map(([v, l]) => `<option value="${v}" ${App.barreArrets.gps === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+    </div>
+    <div class="inline-flex" style="justify-content:space-between;width:100%;margin-bottom:10px;">
+      <button id="ar-nouv" class="b-bleu">+ Créer un arrêt</button>
+      <button id="ar-raz" class="petit">Réinitialiser les filtres</button>
     </div>
     <div class="enveloppe-table"><table>
       <thead><tr>${cols.map(c => `<th>${core.esc(c.label)}${c.cle === "gps" ? " (⚠ = à géolocaliser)" : ""}</th>`).join("")}<th style="text-align:right;">Actions</th></tr></thead>
@@ -83,7 +97,11 @@ window.Topo.vueArrets = (d, core) => {
     const cible = document.getElementById("ar-q");
     if (cible) { cible.focus(); cible.setSelectionRange(cible.value.length, cible.value.length); }
   };
+  racine.querySelector("#ar-lieu").onchange = (e) => { App.barreArrets.lieu = e.target.value; core.rafraichir(); };
+  racine.querySelector("#ar-gps").onchange = (e) => { App.barreArrets.gps = e.target.value; core.rafraichir(); };
   racine.querySelector("#ar-nouv").onclick = () => formulaireArret(d, core, null, null);
+  racine.querySelector("#ar-raz").onclick = () => { App.barreArrets = { q: "", lieu: "all", gps: "all" }; core.rafraichir(); };
+  racine.querySelector("#ar-exp").onclick = () => modalExportStandards(d, core);
 
   /* Corps du tableau : une seule écriture + événements délégués
      (même optimisation que le tableau des lignes). */
@@ -298,41 +316,83 @@ window.Topo.vueArrets = (d, core) => {
    V2.4 — TABLEAU DES LIEUX (onglet « 🚉 Lieux », même ergonomie que
    les arrêts : recherche, création, ✎/🗑, double-clic = fiche,
    📋 Copier (Excel), 📥 Importer clé = abréviation du LIEU).
-   Colonnes FIXES (pas de ⚙ Colonnes pour garder la vue simple).
+   V2.5 : MÊME DISPOSITION que le tableau des lignes (demande de
+   Jules) : ⚙ Colonnes mémorisé par instance, barre de recherche à
+   CHOIX MULTIPLES (caractéristique, GPS), bouton « + Créer un lieu »
+   au-dessus à gauche du tableau + Réinitialiser.
    La CARACTÉRISTIQUE (gare, passerelle… cf. GTFS) est un champ libre
    avec suggestions (datalist de vue.js).
    ================================================================ */
 
+/* Colonnes du tableau des lieux. "id" est FIXE. */
+const LIEU_COLONNES = [
+  { cle: "id", label: "ID unique", fixe: true },
+  { cle: "abrev", label: "Abrév." },
+  { cle: "nom", label: "Nom" },
+  { cle: "caract", label: "Caractéristique" },
+  { cle: "lat", label: "Latitude" },
+  { cle: "lng", label: "Longitude" },
+  { cle: "nbArrets", label: "Arrêts" },
+  { cle: "gps", label: "GPS" }
+];
+
 window.Topo.vueLieux = (d, core) => {
   Topo.init(d);
-  if (!App.barreLieux) App.barreLieux = { q: "" };
+  const prefCle = "hastus_colonnes_lieux_" + (App.instanceOuverte ? App.instanceOuverte.id : "?");
+  if (!App.barreLieux) App.barreLieux = { q: "", caract: "all", gps: "all" };
   const q = String(App.barreLieux.q || "").trim().toLowerCase();
   const nbArretsParLieu = new Map();
   d.topo.arrets.forEach(a => { if (a.lieuId) nbArretsParLieu.set(a.lieuId, (nbArretsParLieu.get(a.lieuId) || 0) + 1); });
 
-  /* Filtrage : recherche sur abréviation, nom et caractéristique. */
+  /* Préférences de colonnes (mémorisées par instance, comme les lignes). */
+  let colonnesChoisies;
+  try {
+    const p = JSON.parse(localStorage.getItem(prefCle) || "null");
+    colonnesChoisies = Array.isArray(p) && p.length ? p : ["abrev", "nom", "caract", "lat", "lng", "nbArrets", "gps"];
+  } catch (e) { colonnesChoisies = ["abrev", "nom", "caract", "lat", "lng", "nbArrets", "gps"]; }
+  const cles = ["id", ...colonnesChoisies];
+  const cols = cles.map(cle => LIEU_COLONNES.find(c => c.cle === cle)).filter(Boolean);
+  const valCol = (l, cle) => cle === "nbArrets" ? (nbArretsParLieu.get(l.id) || 0)
+    : cle === "gps" ? ((l.lat != null && l.lng != null) ? "✓" : "⚠")
+    : (l[cle] != null ? l[cle] : (cle === "lat" || cle === "lng" ? "" : "—"));
+
+  /* Filtrage : recherche (abréviation, nom, caractéristique) + CHOIX
+     MULTIPLES : caractéristique + état GPS. */
   const visibles = d.topo.lieux.filter(l => {
-    if (!q) return true;
-    return ((l.abrev || "") + " " + (l.nom || "") + " " + (l.caract || "")).toLowerCase().includes(q);
+    if (q && !((l.abrev || "") + " " + (l.nom || "") + " " + (l.caract || "")).toLowerCase().includes(q)) return false;
+    if (App.barreLieux.caract !== "all" && (l.caract || "") !== App.barreLieux.caract) return false;
+    const sansGps = (l.lat == null || l.lng == null);
+    if (App.barreLieux.gps === "oui" && sansGps) return false;
+    if (App.barreLieux.gps === "non" && !sansGps) return false;
+    return true;
   });
 
   const racine = core.h(`<div class="carte panneau-travail tableau-page">
     <div class="barre-outils">
       <div class="titre">Tableau de gestion des lieux</div>
       <div class="actions">
+        <span class="menu-col"><button id="li-col">⚙ Colonnes</button></span>
         <button id="li-copy">📋 Copier (Excel)</button>
         <button id="li-masse">📥 Importer</button>
+        <button id="li-exp" title="Paramétrage des exports GTFS / NeTEx">⚙ GTFS/NeTEx</button>
       </div>
     </div>
-    <div class="barre-filtres" style="grid-template-columns:2fr 1fr;">
+    <div class="barre-filtres" style="grid-template-columns:2fr 1fr 1fr;">
       <div class="champ"><label>Recherche</label>
         <input id="li-q" value="${core.esc(App.barreLieux.q)}" placeholder="Abréviation, nom, caractéristique…"/></div>
-      <div class="champ"><label>&nbsp;</label>
-        <button id="li-nouv" class="b-bleu" style="width:100%;">+ Créer un lieu</button></div>
+      <div class="champ"><label>Caractéristique</label>
+        <select id="li-caract"><option value="all">Toutes</option>
+          ${[...new Set(d.topo.lieux.map(l => l.caract).filter(Boolean))].map(c => `<option value="${core.esc(c)}" ${App.barreLieux.caract === c ? "selected" : ""}>${core.esc(c)}</option>`).join("")}</select></div>
+      <div class="champ"><label>GPS</label>
+        <select id="li-gps">${[["all", "Tous"], ["oui", "Géolocalisés"], ["non", "À géolocaliser"]]
+          .map(([v, l]) => `<option value="${v}" ${App.barreLieux.gps === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+    </div>
+    <div class="inline-flex" style="justify-content:space-between;width:100%;margin-bottom:10px;">
+      <button id="li-nouv" class="b-bleu">+ Créer un lieu</button>
+      <button id="li-raz" class="petit">Réinitialiser les filtres</button>
     </div>
     <div class="enveloppe-table"><table>
-      <thead><tr><th>ID unique</th><th>Abrév.</th><th>Nom</th><th>Caractéristique</th>
-      <th>Latitude</th><th>Longitude</th><th>Arrêts</th><th>GPS</th><th style="text-align:right;">Actions</th></tr></thead>
+      <thead><tr>${cols.map(c => `<th>${core.esc(c.label)}${c.cle === "gps" ? " (⚠ = à géolocaliser)" : ""}</th>`).join("")}<th style="text-align:right;">Actions</th></tr></thead>
       <tbody id="li-corps"></tbody>
     </table></div>
     <p class="info-txt" id="li-compte" style="margin-top:8px;"></p>
@@ -343,19 +403,18 @@ window.Topo.vueLieux = (d, core) => {
     const cible = document.getElementById("li-q");
     if (cible) { cible.focus(); cible.setSelectionRange(cible.value.length, cible.value.length); }
   };
+  racine.querySelector("#li-caract").onchange = (e) => { App.barreLieux.caract = e.target.value; core.rafraichir(); };
+  racine.querySelector("#li-gps").onchange = (e) => { App.barreLieux.gps = e.target.value; core.rafraichir(); };
   racine.querySelector("#li-nouv").onclick = () => formulaireLieu(d, core, null, null);
+  racine.querySelector("#li-raz").onclick = () => { App.barreLieux = { q: "", caract: "all", gps: "all" }; core.rafraichir(); };
+  racine.querySelector("#li-exp").onclick = () => modalExportStandards(d, core);
 
   const corps = racine.querySelector("#li-corps");
   corps.innerHTML = visibles.map(l =>
-    `<tr data-id="${core.esc(l.id)}">` +
-    `<td>${core.esc(l.id)}</td><td>${core.esc(l.abrev)}</td><td>${core.esc(l.nom)}</td>` +
-    `<td>${core.esc(l.caract || "")}</td>` +
-    `<td>${l.lat != null ? core.esc(String(l.lat)) : ""}</td><td>${l.lng != null ? core.esc(String(l.lng)) : ""}</td>` +
-    `<td>${nbArretsParLieu.get(l.id) || 0}</td>` +
-    `<td>${(l.lat != null && l.lng != null) ? "✓" : "⚠"}</td>` +
+    `<tr data-id="${core.esc(l.id)}">` + cols.map(c => `<td>${core.esc(String(valCol(l, c.cle)))}</td>`).join("") +
     `<td style="text-align:right;"><button class="ico" data-act="mod" data-id="${core.esc(l.id)}" title="Modifier">✎</button><button class="ico suppr" data-act="sup" data-id="${core.esc(l.id)}" title="Supprimer (refusé si des arrêts sont rattachés)">🗑</button></td></tr>`
   ).join("") + (!visibles.length
-    ? `<tr><td colspan="9" style="text-align:center;color:#64748b;">${d.topo.lieux.length ? "Aucun lieu ne correspond à la recherche." : "Aucun lieu — cliquez « + Créer un lieu »."}</td></tr>` : "");
+    ? `<tr><td colspan="${cols.length + 1}" style="text-align:center;color:#64748b;">${d.topo.lieux.length ? "Aucun lieu ne correspond aux filtres." : "Aucun lieu — cliquez « + Créer un lieu »."}</td></tr>` : "");
   corps.addEventListener("click", (e) => {
     const b = e.target.closest("button[data-act]");
     if (!b) return;
@@ -375,6 +434,41 @@ window.Topo.vueLieux = (d, core) => {
   });
   racine.querySelector("#li-compte").textContent =
     `${visibles.length} lieu(x) affiché(s) sur ${d.topo.lieux.length}` + (q ? ` — recherche « ${App.barreLieux.q} »` : "");
+
+  /* ⚙ Colonnes : même mécanique que les tableaux lignes/arrêts (V2.5). */
+  racine.querySelector("#li-col").onclick = () => {
+    const ancien = racine.querySelector(".panneau");
+    if (ancien) { ancien.remove(); return; }
+    let travail = [...colonnesChoisies];
+    LIEU_COLONNES.forEach(c => { if (!c.fixe && !travail.includes(c.cle)) travail.push(c.cle); });
+    const cochees = new Set(colonnesChoisies);
+    const pan = core.h(`<div class="panneau" style="width:320px;">
+      <b style="font-size:13px;">Colonnes affichées</b>
+      <p class="info-txt" style="margin:2px 0 6px;">Cocher/décocher · « Appliquer » enregistre.</p>
+      <div id="lip-liste" style="max-height:240px;overflow-y:auto;"></div>
+      <div class="ligne-boutons" style="margin:6px 0 0;">
+        <button id="lip-ann">✕ Fermer</button><button id="lip-ok" class="b-bleu">Appliquer</button>
+      </div>
+    </div>`);
+    const dessiner = () => {
+      const box = pan.querySelector("#lip-liste");
+      box.innerHTML = "";
+      travail.forEach(cle => {
+        const col = LIEU_COLONNES.find(c => c.cle === cle);
+        const l = core.h(`<label class="p-ligne"><input type="checkbox" ${cochees.has(cle) || col.fixe ? "checked" : ""} ${col.fixe ? "disabled" : ""}/> <span>${core.esc(col.label)}${col.fixe ? ' <span class="etiquette">fixe</span>' : ""}</span></label>`);
+        l.querySelector("input").onchange = (ev) => ev.target.checked ? cochees.add(cle) : cochees.delete(cle);
+        box.appendChild(l);
+      });
+    };
+    dessiner();
+    pan.querySelector("#lip-ann").onclick = () => pan.remove();
+    pan.querySelector("#lip-ok").onclick = () => {
+      colonnesChoisies = travail.filter(cle => cochees.has(cle));
+      localStorage.setItem(prefCle, JSON.stringify(colonnesChoisies));
+      core.rafraichir();
+    };
+    racine.querySelector("#li-col").parentElement.appendChild(pan);
+  };
 
   /* 📋 Copier (Excel) : TSV Abrév / Nom / Caractéristique / Latitude / Longitude. */
   racine.querySelector("#li-copy").onclick = () => {
@@ -477,3 +571,106 @@ window.Topo.vueLieux = (d, core) => {
 
   return racine;
 };
+
+
+/* ================================================================
+   V2.5 — PANNEAU DE CONFIGURATION « ⚙ GTFS/NeTEx » (demande de
+   Jules) : tout ce qu'il faut paramétrer pour un export correct des
+   ARRÊTS et LIEUX aux standards GTFS (stops.txt) et NeTEx (StopPlace).
+   Ces réglages appartiennent à l'INSTANCE (d.topo.export) : ils
+   valent pour tous les arrêts et lieux, et seront lus par le futur
+   module d'export. Chaque champ indique à quel standard il sert.
+   ================================================================ */
+
+function modalExportStandards(d, core) {
+  Topo.init(d);
+  if (!d.topo.export) d.topo.export = {};
+  const e = d.topo.export;
+  /* Valeurs par défaut raisonnables pour la France. GTFS location_type :
+     0 = arrêt, 1 = station/gare, 2 = entrée/sortie, 3 = nœud générique,
+     4 = zone d'embarquement. */
+  const v = {
+    fuseau: e.fuseau || "Europe/Paris",
+    langue: e.langue || "fr",
+    stopId: e.stopId || "abrev",
+    stopCode: e.stopCode || "abrev",
+    wheelchair: e.wheelchair == null ? "0" : String(e.wheelchair),
+    locGare: e.locGare == null ? "1" : String(e.locGare),
+    locEntree: e.locEntree == null ? "2" : String(e.locEntree),
+    locAutre: e.locAutre == null ? "3" : String(e.locAutre),
+    netexProfil: e.netexProfil || "NeTEx standard",
+    netexPrefixe: e.netexPrefixe || "",
+    netexVersion: e.netexVersion || "1"
+  };
+  const locOptions = [["0", "0 — Arrêt (stop)"], ["1", "1 — Station / gare"], ["2", "2 — Entrée / sortie"], ["3", "3 — Nœud générique"], ["4", "4 — Zone d'embarquement"]];
+  const sel = (id, val, opts) => `<select id="${id}">${opts.map(([x, l]) => `<option value="${x}" ${val === x ? "selected" : ""}>${l}</option>`).join("")}</select>`;
+  const f = core.h(`<form class="panneau-travail">
+    <h3>⚙ Paramétrage de l'export GTFS / NeTEx</h3>
+    <p class="info-txt">Ces réglages valent pour TOUS les arrêts et lieux de l'instance. Ils alimentent les futurs exports : GTFS (fichier stops.txt) et NeTEx (StopPlace).</p>
+
+    <h4>GTFS — general (agency.txt / feed_info.txt)</h4>
+    <div class="grille">
+      <div class="champ"><label>Fuseau horaire (agency_timezone)</label>
+        <input id="x-fuseau" list="x-fuseaux" value="${core.esc(v.fuseau)}"/>
+        <datalist id="x-fuseaux"><option value="Europe/Paris"></option><option value="Europe/Brussels"></option><option value="Europe/Zurich"></option><option value="Europe/London"></option></datalist></div>
+      <div class="champ"><label>Langue du feed (feed_lang)</label>
+        <input id="x-langue" maxlength="8" value="${core.esc(v.langue)}"/></div>
+    </div>
+
+    <h4>GTFS — stops.txt</h4>
+    <div class="grille">
+      <div class="champ"><label>Identifiant stop_id tiré de</label>
+        ${sel("x-stopid", v.stopId, [["abrev", "L'abréviation (recommandé)"], ["id", "L'identifiant interne"]])}</div>
+      <div class="champ"><label>Code stop_code (public)</label>
+        ${sel("x-stopcode", v.stopCode, [["abrev", "L'abréviation (recommandé)"], ["aucun", "Pas de code (vide)"]])}</div>
+      <div class="champ"><label>Accès PMR par défaut (wheelchair_boarding)</label>
+        ${sel("x-pmr", v.wheelchair, [["0", "0 — Inconnu"], ["1", "1 — Accessible"], ["2", "2 — Non accessible"]])}</div>
+    </div>
+    <p class="info-txt">Correspondance automatique des LIEUX vers location_type (le parent_station de l'arrêt) :</p>
+    <div class="grille">
+      <div class="champ"><label>Lieu « Gare / Station » exporté comme</label>
+        ${sel("x-locgare", v.locGare, locOptions)}</div>
+      <div class="champ"><label>Lieu « Passerelle / Entrée » exporté comme</label>
+        ${sel("x-locentree", v.locEntree, locOptions)}</div>
+      <div class="champ"><label>Autre caractéristique exportée comme</label>
+        ${sel("x-locautre", v.locAutre, locOptions)}</div>
+    </div>
+    <p class="info-txt">Les arrêts sont exportés en location_type 0, rattachés à leur lieu (parent_station) ; leurs coordonnées propres (V2.4) remplissent stop_lat / stop_lon.</p>
+
+    <h4>NeTEx — StopPlace</h4>
+    <div class="grille">
+      <div class="champ"><label>Profil NeTEx</label>
+        ${sel("x-netexprofil", v.netexProfil, [["NeTEx standard", "NeTEx standard (EN 12896)"], ["NeTEx France", "NeTEx France (profil transmodel)"], ["SIRI", "SIRI / NeTEx temps réel"]])}</div>
+      <div class="champ"><label>Préfixe d'identifiants (code space)</label>
+        <input id="x-netexprefixe" placeholder="Ex. FR-Star (vide = aucun)" value="${core.esc(v.netexPrefixe)}"/></div>
+      <div class="champ"><label>Version des objets exportés</label>
+        <input id="x-netexversion" placeholder="Ex. 1" value="${core.esc(v.netexVersion)}"/></div>
+    </div>
+    <p class="info-txt">NeTEx utilise la même correspondance des lieux (StopPlace / Access / Quay) : la « Gare » devient un StopPlace, ses arrêts des Quays, une « Passerelle » une Access.</p>
+
+    <div class="actions"><button type="button" class="b-blanc" id="x-fermer">Annuler</button>
+    <button type="submit" class="b-bleu">Enregistrer</button></div>
+    <div id="x-erreurs"></div>
+  </form>`);
+  f.onsubmit = (ev) => {
+    ev.preventDefault();
+    d.topo.export = {
+      fuseau: f.querySelector("#x-fuseau").value.trim() || "Europe/Paris",
+      langue: f.querySelector("#x-langue").value.trim() || "fr",
+      stopId: f.querySelector("#x-stopid").value,
+      stopCode: f.querySelector("#x-stopcode").value,
+      wheelchair: Number(f.querySelector("#x-pmr").value),
+      locGare: Number(f.querySelector("#x-locgare").value),
+      locEntree: Number(f.querySelector("#x-locentree").value),
+      locAutre: Number(f.querySelector("#x-locautre").value),
+      netexProfil: f.querySelector("#x-netexprofil").value,
+      netexPrefixe: f.querySelector("#x-netexprefixe").value.trim(),
+      netexVersion: f.querySelector("#x-netexversion").value.trim() || "1"
+    };
+    core.sauver();
+    f.closest(".modal-fond").remove();
+    core.rafraichir();
+  };
+  f.querySelector("#x-fermer").onclick = () => f.closest(".modal-fond").remove();
+  core.modal(f);
+}
