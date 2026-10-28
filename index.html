@@ -102,7 +102,7 @@
   .item-objet.grise { opacity: 0.4; }
   .topo-carte { position: relative; height: 100%; min-height: 0; border-radius: 20px; overflow: hidden; background: #e5eaf0; }
   .topo-carte > div:first-child { position: absolute; inset: 0; height: 100%; }
-  .topo-carte #topo-carte-fallback { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 20px; }
+    .topo-carte #topo-carte-fallback { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 20px; pointer-events: none; }
   /* IMPORTANT (bug V2.2.1) : pour que les fenêtres modales (pop-up ⚙,
      création d'arrêt…) passent AU-DESSUS de la carte Leaflet (dont les
      calques vont jusqu'à z-index 1000), le z-index: 3000 est réglé
@@ -1002,7 +1002,7 @@ function vueEspaceTravail(u) {
       </span>
     </div>
     <div class="conteneur" id="haut-travail"></div>
-    <div class="conteneur" id="contenu" ${App.vue === "lignes" || App.vue === "vue" || (App.vue || "").indexOf("mod:") === 0 ? 'style="max-width:none;"' : ""}></div>
+    <div class="conteneur" id="contenu" ${App.vue === "lignes" || App.vue === "vue" || (App.vue || "").indexOf("mod:") === 0 ? 'style="width:calc(100% - 32px);max-width:none;"' : ""}></div>
   </div>`);
   racine.querySelector("#retour-accueil").onclick = () => { App.instanceOuverte = null; App.colonnes = null; rafraichir(); };
   const haut = racine.querySelector("#haut-travail");
