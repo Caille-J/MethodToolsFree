@@ -3,3 +3,5 @@ Note
 sujet sur la page de catalogue qu'il faudra update
 
 schémmatiser en ligne de bus en mode dans larborescence Réseau > contrat > ligne ==> proposer comme écran par défaut dans les parametrages
+
+selectionner des arrêts puis les qualifier génère une dmeande pour les rattacher à un lieu ou zone d'embarquement etc... par défaut se met au milieu mais déplacable récupère le lieu du premier sélectionner supprime les autres s'il n'est pas utilisé sur un autre arrêt
