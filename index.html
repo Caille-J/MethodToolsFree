@@ -268,7 +268,8 @@ const Noyau = (() => {
       "Types de véhicule": catNeuve(["Bus standard 12 m", "Bus articulé 18 m", "Car 13 m", "Minibus"]),
       "Types d'énergie": catNeuve(["Gasoil", "HVO", "Électrique", "GNV", "Hybride"]),
       "Fonctions embarquées": catNeuve(["Wi-Fi", "PMR", "Emport vélo", "Prise USB", "Écran info voyageurs"]),
-      "Groupes de lignes": catNeuve([])   // sert au network_id des exports GTFS/NeTEx
+      "Groupes de lignes": catNeuve([]),  // sert au network_id des exports GTFS/NeTEx
+      "Zones": catNeuve([])               // V2.6 : zones tarifaires (GTFS zone_id) proposées dans les fiches arrêts/lieux
     },
     colonnesCalculees: [], // colonnes compteur définies par l'utilisateur (onglet dédié)
     compteur: 1 // générateur d'identifiants locaux à l'instance
@@ -553,6 +554,8 @@ const BD = (() => {
       });
       if (d.catalogue && !d.catalogue["Groupes de lignes"])
         d.catalogue["Groupes de lignes"] = { colonnes: ["export"], labels: [] };
+      if (d.catalogue && !d.catalogue["Zones"])   // V2.6 : zones tarifaires (GTFS zone_id)
+        d.catalogue["Zones"] = { colonnes: ["export"], labels: [] };
       if (!d.colonnesCalculees) d.colonnesCalculees = [];
       (d.lignes || []).forEach(l => { if (l.groupe === undefined) l.groupe = ""; });
     });
@@ -2650,9 +2653,9 @@ function lancerTests() {
   };
   const assert = (cond, msg) => { if (!cond) throw new Error(msg); };
 
-  test("Instance neuve contient les 6 catégories du catalogue", () => {
+  test("Instance neuve contient les 7 catégories du catalogue", () => {
     const d = Noyau.instanceNeuve();
-    assert(Object.keys(d.catalogue).length === 6, "6 catégories attendues");
+    assert(Object.keys(d.catalogue).length === 7, "7 catégories attendues (V2.6 : + Zones)");
     assert(d.lignes.length === 0, "Aucune ligne au départ");
     // Le catalogue est maintenant un classeur : labels avec origine + codes.
     assert(d.catalogue["Activités"].labels[0].origine === "standard", "Les labels d'origine sont 'standard'");
@@ -2915,11 +2918,11 @@ function lancerTests() {
     test("Topo : schéma versionné + lieu créé, doublon d'abréviation refusé", () => {
       const d = Noyau.instanceNeuve();
       const t = Topo.init(d);
-      assert(t.version === "topo-3" && Array.isArray(t.lieux), "d.topo doit exister au schéma topo-3");
-      const r = Topo.creerLieu(d, { nom: "Place de la République", abrev: "REP" });
+      assert(t.version === "topo-4" && Array.isArray(t.lieux), "d.topo doit exister au schéma topo-4");
+      const r = Topo.creerLieu(d, { nom: "Place de la République", abrev: "REP", lat: 1, lng: 2 });
       assert(r.ok, "La création d'un lieu valide doit réussir : " + (r.erreurs || []).join(" "));
       assert(t.lieux.length === 1 && t.lieux[0].id[0] === "t", "Le lieu doit être stocké avec un id topo");
-      const r2 = Topo.creerLieu(d, { nom: "Gare", abrev: "rep" });
+      const r2 = Topo.creerLieu(d, { nom: "Gare", abrev: "rep", lat: 3, lng: 4 });
       assert(!r2.ok, "Un doublon d'abréviation (même casse) doit être refusé");
       const r3 = Topo.creerLieu(d, { nom: "", abrev: "GAR" });
       assert(!r3.ok, "Un lieu sans nom doit être refusé");
@@ -2942,9 +2945,43 @@ function lancerTests() {
       const d = Noyau.instanceNeuve(); Topo.init(d);
       const r1 = Topo.creerArret(d, { nom: "Place", abrev: "PL", lat: 1, lng: 2 });
       const lieuId = r1.lieu.id;
-      const r2 = Topo.creerArret(d, { nom: "Arrêt 2", abrev: "A2", lieuId: lieuId });
+      const r2 = Topo.creerArret(d, { nom: "Arrêt 2", abrev: "A2", lieuId: lieuId, lat: 1, lng: 2 });
       assert(r2.ok && d.topo.lieux.length === 1, "Aucun lieu supplémentaire ne doit être créé");
       assert(r2.arret.lieuId === lieuId, "L'arrêt est rattaché au lieu existant");
+    });
+    test("V2.6 : champs GTFS des arrêts et lieux (validation)", () => {
+      const d = Noyau.instanceNeuve(); Topo.init(d);
+      const r = Topo.creerArret(d, { nom: "Gare", abrev: "GAR", lat: 48.1, lng: -1.6 });
+      assert(r.ok, "La création d'arrêt doit réussir");
+      /* Le GPS est désormais OBLIGATOIRE (GTFS stop_lat / stop_lon). */
+      const rSansGps = Topo.creerArret(d, { nom: "Sans GPS", abrev: "SGPS", lieuId: r.lieu.id });
+      assert(!rSansGps.ok, "Un arrêt sans coordonnées doit être refusé (V2.6)");
+      /* Le nom est limité à 32 caractères (GTFS stop_name). */
+      const rNomLong = Topo.creerLieu(d, { nom: "X".repeat(33), abrev: "LONG", lat: 1, lng: 2 });
+      assert(!rNomLong.ok, "Un nom de plus de 32 caractères doit être refusé (V2.6)");
+      /* parent_station : interdit sur une gare (location_type 1), et doit
+         désigner l'abréviation d'un lieu ou arrêt existant. */
+      const rp = Topo.modifierArret(d, r.arret.id, { nom: "Gare", abrev: "GAR", gtfs: { locationType: 2, parentStation: "GAR" } });
+      assert(!rp.ok, "Un objet ne peut pas être son propre parent (V2.6)");
+      const rp2 = Topo.modifierArret(d, r.arret.id, { nom: "Gare", abrev: "GAR", gtfs: { locationType: 2, parentStation: "INCONNU" } });
+      assert(!rp2.ok, "Un parent inexistant doit être refusé (V2.6)");
+      const rp3 = Topo.modifierArret(d, r.arret.id, { nom: "Gare", abrev: "GAR", gtfs: { locationType: 1, parentStation: "GAR" } });
+      assert(!rp3.ok, "Une gare / station (type 1) ne peut pas avoir de parent (V2.6)");
+      const rp4 = Topo.modifierArret(d, r.arret.id, { nom: "Gare", abrev: "GAR", gtfs: { locationType: 0, parentStation: "GAR", stopUrl: "x".repeat(129) } });
+      assert(!rp4.ok, "Une URL de plus de 128 caractères doit être refusée (V2.6)");
+      const rl2 = Topo.creerLieu(d, { nom: "Pôle Nord", abrev: "PNORD", lat: 48.2, lng: -1.7 });
+      assert(rl2.ok, "La création du second lieu doit réussir");
+      const rok = Topo.modifierArret(d, r.arret.id, { nom: "Gare", abrev: "GAR", gtfs: { locationType: 2, parentStation: "PNORD" } });
+      assert(rok.ok, "Un arrêt peut avoir un lieu existant comme parent (V2.6) : " + ((rok.erreurs || []).join(" ")));
+      const g = d.topo.arrets[0].gtfs;
+      assert(g.locationType === 2 && g.parentStation === "PNORD" && g.timezone === "Europe/Paris",
+        "Les champs GTFS doivent être enregistrés, avec le fuseau Europe/Paris par défaut (V2.6)");
+      /* La fusion : modifier un seul champ GTFS ne doit pas effacer les autres. */
+      Topo.modifierArret(d, r.arret.id, { nom: "Gare", abrev: "GAR", gtfs: { wheelchair: 1 } });
+      assert(d.topo.arrets[0].gtfs.parentStation === "PNORD" && d.topo.arrets[0].gtfs.wheelchair === 1,
+        "Un champ GTFS modifié ne doit pas effacer les autres (fusion, V2.6)");
+      /* Zones du catalogue proposées pour zone_id. */
+      assert(d.catalogue["Zones"] && Array.isArray(d.catalogue["Zones"].labels), "L'onglet Zones doit exister dans le catalogue (V2.6)");
     });
     test("V2.3/V2.4 : modifierArret/supprimerArret — GPS PROPRE à l'arrêt", () => {
       const d = Noyau.instanceNeuve(); Topo.init(d);

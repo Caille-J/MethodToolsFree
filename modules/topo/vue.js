@@ -347,10 +347,10 @@ function formulaireArret(d, core, lat, lng) {
   const f = core.h(`<form class="panneau-travail">
     <h3>Créer un arrêt</h3>
     <p class="info-txt">Par défaut, un nouveau lieu portant le même nom et les mêmes coordonnées sera créé automatiquement. Vous pourrez ensuite réaffecter l'arrêt à un autre lieu dans son paramétrage.</p>
-    <label>Nom <input id="a-nom" maxlength="64" required placeholder="Ex. Gare Centre"></label>
+    <label>Nom <input id="a-nom" maxlength="32" required placeholder="Ex. Gare Centre"></label>
     <label>Abréviation <input id="a-abrev" maxlength="8" required placeholder="Ex. GCE"></label>
-    <label>Latitude <input id="a-lat" type="number" step="any" value="${lat != null ? lat : ""}" placeholder="Ex. 48.11"></label>
-    <label>Longitude <input id="a-lng" type="number" step="any" value="${lng != null ? lng : ""}" placeholder="Ex. -1.67"></label>
+    <label>Latitude <input id="a-lat" type="number" step="any" required value="${lat != null ? lat : ""}" placeholder="Ex. 48.11"></label>
+    <label>Longitude <input id="a-lng" type="number" step="any" required value="${lng != null ? lng : ""}" placeholder="Ex. -1.67"></label>
     <label>Lieu <select id="a-lieu"><option value="">— Nouveau lieu (par défaut) —</option>${lieux}</select></label>
     <div class="actions"><button type="button" class="b-blanc" id="a-fermer">Annuler</button>
     <button type="submit" class="b-bleu">Créer l'arrêt</button></div>
@@ -378,7 +378,90 @@ function formulaireArret(d, core, lat, lng) {
   core.modal(f);
 }
 
-/* ----- FICHE DE MODIFICATION D'ARRÊT (V2.3) ----- */
+/* ----- V2.6 : BLOC DE CHAMPS GTFS/NeTEx (fiches arrêt et lieu) -----
+   Chaque champ porte le nom de sa colonne GTFS. Les règles dynamiques :
+   - parent_station désactivé pour une GARE (location_type 1) ;
+   - wheelchair_boarding désactivé tant qu'aucun parent n'est choisi ;
+   - level_id et stop_access réservés (non implémentés, forcés off). */
+
+function optionsZones(d, core, courant) {
+  const cat = d.catalogue && d.catalogue["Zones"];
+  const labels = (cat && cat.labels) || [];
+  return labels.map(z => `<option value="${core.esc(z.nom)}" ${courant === z.nom ? "selected" : ""}>${core.esc(z.nom)}</option>`).join("");
+}
+
+function blocGtfs(d, core, g, selfAbrev, selfId) {
+  g = Topo.normaliserGtfs(g);
+  const lieux = d.topo.lieux.filter(l => l.id !== selfId);
+  const arrets = d.topo.arrets.filter(a => a.id !== selfId);
+  const parentPossible = g.locationType !== 1;
+  const optsParents = [
+    `<option value="">— Aucun parent —</option>`,
+    ...lieux.map(l => `<option value="${core.esc(l.abrev)}" ${g.parentStation === l.abrev ? "selected" : ""}>${core.esc(l.nom)} (${core.esc(l.abrev)}) · lieu</option>`),
+    ...arrets.map(a => `<option value="${core.esc(a.abrev)}" ${g.parentStation === a.abrev ? "selected" : ""}>${core.esc(a.nom)} (${core.esc(a.abrev)}) · arrêt</option>`)
+  ].join("");
+  return `
+    <h4 style="margin-top:14px;">Paramètres d'export GTFS / NeTEx</h4>
+    <p class="info-txt">Ces réglages alimentent les fichiers d'export : GTFS stops.txt et NeTEx StopPlace. Les champs signalés « obligatoire » conditionnent la validité de l'export.</p>
+    <div class="grille">
+      <div class="champ"><label>Adresse / description (stop_desc) — facultatif</label>
+        <input id="g-adresse" maxlength="128" value="${core.esc(g.adresse)}" placeholder="Ex. 12 place de la Gare"/></div>
+      <div class="champ"><label>Zone tarifaire (zone_id) — facultatif</label>
+        <select id="g-zone"><option value="">— Aucune zone —</option>${optionsZones(d, core, g.zoneId)}</select></div>
+      <div class="champ"><label>Page web de l'arrêt (stop_url) — facultatif</label>
+        <input id="g-url" maxlength="128" value="${core.esc(g.stopUrl)}" placeholder="Ex. https://…"/></div>
+      <div class="champ"><label>Type de lieu (location_type)</label>
+        <select id="g-loctype">${Topo.LOCATION_TYPES.map(([v, l]) => `<option value="${v}" ${Number(g.locationType) === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+      <div class="champ"><label>Parent (parent_station) — abréviation du parent</label>
+        <select id="g-parent" ${parentPossible ? "" : "disabled title=\"Une gare / station (type 1) ne peut pas avoir de parent.\""}>${optsParents}</select></div>
+      <div class="champ"><label>Fuseau horaire (stop_timezone)</label>
+        <input id="g-tz" value="${core.esc(g.timezone)}" placeholder="Ex. Europe/Paris"/></div>
+      <div class="champ"><label>Accessibilité PMR (wheelchair_boarding)</label>
+        <select id="g-pmr" ${g.parentStation ? "" : "disabled title=\"Renseignez d'abord un parent (parent_station).\""}>
+          <option value="0" ${Number(g.wheelchair) === 0 ? "selected" : ""}>0 — Aucune information</option>
+          <option value="1" ${Number(g.wheelchair) === 1 ? "selected" : ""}>1 — Accessible</option>
+          <option value="2" ${Number(g.wheelchair) === 2 ? "selected" : ""}>2 — Non accessible</option>
+        </select></div>
+      <div class="champ"><label>Niveau (level_id) — non implémenté</label>
+        <input id="g-level" value="" disabled title="Réservé à une évolution future de l'application."/></div>
+      <div class="champ"><label>Code de quai (platform_code) — facultatif</label>
+        <input id="g-platform" maxlength="8" value="${core.esc(g.platformCode)}" placeholder="Ex. Quai 3"/></div>
+      <div class="champ"><label>Accès (stop_access) — réservé</label>
+        <label style="font-weight:400;"><input type="checkbox" id="g-access" disabled> Activé (bientôt disponible)</label></div>
+    </div>`;
+}
+
+/* Lit les champs GTFS du formulaire (f) et les rend au format noyau. */
+function lireChampsGtfs(f) {
+  return {
+    adresse: f.querySelector("#g-adresse").value,
+    zoneId: f.querySelector("#g-zone").value,
+    stopUrl: f.querySelector("#g-url").value,
+    locationType: Number(f.querySelector("#g-loctype").value),
+    parentStation: f.querySelector("#g-parent").disabled ? "" : f.querySelector("#g-parent").value,
+    timezone: f.querySelector("#g-tz").value,
+    wheelchair: Number(f.querySelector("#g-pmr").disabled ? 0 : f.querySelector("#g-pmr").value),
+    platformCode: f.querySelector("#g-platform").value
+  };
+}
+
+/* Règles dynamiques du bloc : type de lieu → parent ; parent → PMR. */
+function brancherGtfs(f) {
+  const loctype = f.querySelector("#g-loctype");
+  const parent = f.querySelector("#g-parent");
+  const pmr = f.querySelector("#g-pmr");
+  const majParent = () => {
+    if (loctype.value === "1") { parent.value = ""; parent.disabled = true; }
+    else parent.disabled = false;
+    majPmr();
+  };
+  const majPmr = () => { pmr.disabled = !parent.value; };
+  loctype.addEventListener("change", majParent);
+  parent.addEventListener("change", majPmr);
+  majParent();
+}
+
+/* ----- FICHE DE MODIFICATION D'ARRÊT (V2.3 ; V2.6 : + champs GTFS) ----- */
 
 function ficheArret(d, core, idArret) {
   const a = d.topo.arrets.find(x => x.id === idArret);
@@ -388,16 +471,18 @@ function ficheArret(d, core, idArret) {
     `<option value="${x.id}" ${x.id === a.lieuId ? "selected" : ""}>${core.esc(x.nom)} (${core.esc(x.abrev)})</option>`).join("");
   const f = core.h(`<form class="panneau-travail">
     <h3>Modifier l'arrêt — ${core.esc(a.nom)}</h3>
-    <label>Nom <input id="e-nom" maxlength="64" required value="${core.esc(a.nom)}"></label>
+    <label>Nom <input id="e-nom" maxlength="32" required value="${core.esc(a.nom)}"></label>
     <label>Abréviation <input id="e-abrev" maxlength="8" required value="${core.esc(a.abrev)}"></label>
     <label>Lieu <select id="e-lieu">${lieuxOpts}</select></label>
-    <label>Latitude <input id="e-lat" type="number" step="any" value="${a.lat != null ? a.lat : ""}"></label>
-    <label>Longitude <input id="e-lng" type="number" step="any" value="${a.lng != null ? a.lng : ""}"></label>
+    <label>Latitude <input id="e-lat" type="number" step="any" required value="${a.lat != null ? a.lat : ""}"></label>
+    <label>Longitude <input id="e-lng" type="number" step="any" required value="${a.lng != null ? a.lng : ""}"></label>
     <p class="info-txt">Les coordonnées sont celles de l'ARRÊT, indépendantes de son lieu (V2.4) : déplacer un arrêt ne déplace jamais le lieu.</p>
+    ${blocGtfs(d, core, a.gtfs, a.abrev, a.id)}
     <div class="actions"><button type="button" class="b-blanc" id="e-fermer">Annuler</button>
     <button type="submit" class="b-bleu">Enregistrer</button></div>
     <div id="e-erreurs"></div>
   </form>`);
+  brancherGtfs(f);
   f.onsubmit = (ev) => {
     ev.preventDefault();
     const r = Topo.modifierArret(d, idArret, {
@@ -405,7 +490,8 @@ function ficheArret(d, core, idArret) {
       abrev: f.querySelector("#e-abrev").value,
       lieuId: f.querySelector("#e-lieu").value || null,
       lat: f.querySelector("#e-lat").value === "" ? null : Number(f.querySelector("#e-lat").value),
-      lng: f.querySelector("#e-lng").value === "" ? null : Number(f.querySelector("#e-lng").value)
+      lng: f.querySelector("#e-lng").value === "" ? null : Number(f.querySelector("#e-lng").value),
+      gtfs: lireChampsGtfs(f)
     });
     if (r.ok) { core.sauver(); f.closest(".modal-fond").remove(); core.rafraichir(); }
     else {
@@ -430,16 +516,18 @@ function ficheLieu(d, core, idLieu) {
   if (!l) return;
   const f = core.h(`<form class="panneau-travail">
     <h3>Modifier le lieu — ${core.esc(l.nom)}</h3>
-    <label>Nom <input id="l-nom" maxlength="64" required value="${core.esc(l.nom)}"></label>
+    <label>Nom <input id="l-nom" maxlength="32" required value="${core.esc(l.nom)}"></label>
     <label>Abréviation <input id="l-abrev" maxlength="8" required value="${core.esc(l.abrev)}"></label>
     <label>Caractéristique <input id="l-caract" list="l-caracts" maxlength="32" value="${core.esc(l.caract || "")}" placeholder="Gare, passerelle… (libre)"></label>
     <datalist id="l-caracts">${LIEU_CARACTERISTIQUES.map(c => `<option value="${core.esc(c)}"></option>`).join("")}</datalist>
-    <label>Latitude <input id="l-lat" type="number" step="any" value="${l.lat != null ? l.lat : ""}"></label>
-    <label>Longitude <input id="l-lng" type="number" step="any" value="${l.lng != null ? l.lng : ""}"></label>
+    <label>Latitude <input id="l-lat" type="number" step="any" required value="${l.lat != null ? l.lat : ""}"></label>
+    <label>Longitude <input id="l-lng" type="number" step="any" required value="${l.lng != null ? l.lng : ""}"></label>
+    ${blocGtfs(d, core, l.gtfs, l.abrev, l.id)}
     <div class="actions"><button type="button" class="b-blanc" id="l-fermer">Annuler</button>
     <button type="submit" class="b-bleu">Enregistrer</button></div>
     <div id="l-erreurs"></div>
   </form>`);
+  brancherGtfs(f);
   f.onsubmit = (ev) => {
     ev.preventDefault();
     const r = Topo.modifierLieu(d, idLieu, {
@@ -447,7 +535,8 @@ function ficheLieu(d, core, idLieu) {
       abrev: f.querySelector("#l-abrev").value,
       caract: f.querySelector("#l-caract").value,
       lat: f.querySelector("#l-lat").value === "" ? null : Number(f.querySelector("#l-lat").value),
-      lng: f.querySelector("#l-lng").value === "" ? null : Number(f.querySelector("#l-lng").value)
+      lng: f.querySelector("#l-lng").value === "" ? null : Number(f.querySelector("#l-lng").value),
+      gtfs: lireChampsGtfs(f)
     });
     if (r.ok) { core.sauver(); f.closest(".modal-fond").remove(); core.rafraichir(); }
     else {
@@ -465,12 +554,12 @@ function formulaireLieu(d, core, lat, lng) {
   const f = core.h(`<form class="panneau-travail">
     <h3>Créer un lieu</h3>
     <p class="info-txt">Un lieu est un point du réseau (gare, passerelle, pôle d'échanges…) auquel des arrêts peuvent se rattacher. Ses coordonnées lui appartiennent en propre.</p>
-    <label>Nom <input id="c-nom" maxlength="64" required placeholder="Ex. Gare de Rennes"></label>
+    <label>Nom <input id="c-nom" maxlength="32" required placeholder="Ex. Gare de Rennes"></label>
     <label>Abréviation <input id="c-abrev" maxlength="8" required placeholder="Ex. GAR"></label>
     <label>Caractéristique <input id="c-caract" list="c-caracts" maxlength="32" placeholder="Gare, passerelle… (libre)"></label>
     <datalist id="c-caracts">${LIEU_CARACTERISTIQUES.map(c => `<option value="${core.esc(c)}"></option>`).join("")}</datalist>
-    <label>Latitude <input id="c-lat" type="number" step="any" value="${lat != null ? lat : ""}" placeholder="Ex. 48.11"></label>
-    <label>Longitude <input id="c-lng" type="number" step="any" value="${lng != null ? lng : ""}" placeholder="Ex. -1.67"></label>
+    <label>Latitude <input id="c-lat" type="number" step="any" required value="${lat != null ? lat : ""}" placeholder="Ex. 48.11"></label>
+    <label>Longitude <input id="c-lng" type="number" step="any" required value="${lng != null ? lng : ""}" placeholder="Ex. -1.67"></label>
     <div class="actions"><button type="button" class="b-blanc" id="c-fermer">Annuler</button>
     <button type="submit" class="b-bleu">Créer le lieu</button></div>
     <div id="c-erreurs"></div>

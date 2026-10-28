@@ -67,7 +67,6 @@ window.Topo.vueArrets = (d, core) => {
         <span class="menu-col"><button id="ar-col">⚙ Colonnes</button></span>
         <button id="ar-copy">📋 Copier (Excel)</button>
         <button id="ar-masse">📥 Importer</button>
-        <button id="ar-exp" title="Paramétrage des exports GTFS / NeTEx">⚙ GTFS/NeTEx</button>
       </div>
     </div>
     <div class="barre-filtres" style="grid-template-columns:2fr 1fr 1fr;">
@@ -101,7 +100,6 @@ window.Topo.vueArrets = (d, core) => {
   racine.querySelector("#ar-gps").onchange = (e) => { App.barreArrets.gps = e.target.value; core.rafraichir(); };
   racine.querySelector("#ar-nouv").onclick = () => formulaireArret(d, core, null, null);
   racine.querySelector("#ar-raz").onclick = () => { App.barreArrets = { q: "", lieu: "all", gps: "all" }; core.rafraichir(); };
-  racine.querySelector("#ar-exp").onclick = () => modalExportStandards(d, core);
 
   /* Corps du tableau : une seule écriture + événements délégués
      (même optimisation que le tableau des lignes). */
@@ -374,7 +372,6 @@ window.Topo.vueLieux = (d, core) => {
         <span class="menu-col"><button id="li-col">⚙ Colonnes</button></span>
         <button id="li-copy">📋 Copier (Excel)</button>
         <button id="li-masse">📥 Importer</button>
-        <button id="li-exp" title="Paramétrage des exports GTFS / NeTEx">⚙ GTFS/NeTEx</button>
       </div>
     </div>
     <div class="barre-filtres" style="grid-template-columns:2fr 1fr 1fr;">
@@ -407,7 +404,6 @@ window.Topo.vueLieux = (d, core) => {
   racine.querySelector("#li-gps").onchange = (e) => { App.barreLieux.gps = e.target.value; core.rafraichir(); };
   racine.querySelector("#li-nouv").onclick = () => formulaireLieu(d, core, null, null);
   racine.querySelector("#li-raz").onclick = () => { App.barreLieux = { q: "", caract: "all", gps: "all" }; core.rafraichir(); };
-  racine.querySelector("#li-exp").onclick = () => modalExportStandards(d, core);
 
   const corps = racine.querySelector("#li-corps");
   corps.innerHTML = visibles.map(l =>
@@ -573,104 +569,3 @@ window.Topo.vueLieux = (d, core) => {
 };
 
 
-/* ================================================================
-   V2.5 — PANNEAU DE CONFIGURATION « ⚙ GTFS/NeTEx » (demande de
-   Jules) : tout ce qu'il faut paramétrer pour un export correct des
-   ARRÊTS et LIEUX aux standards GTFS (stops.txt) et NeTEx (StopPlace).
-   Ces réglages appartiennent à l'INSTANCE (d.topo.export) : ils
-   valent pour tous les arrêts et lieux, et seront lus par le futur
-   module d'export. Chaque champ indique à quel standard il sert.
-   ================================================================ */
-
-function modalExportStandards(d, core) {
-  Topo.init(d);
-  if (!d.topo.export) d.topo.export = {};
-  const e = d.topo.export;
-  /* Valeurs par défaut raisonnables pour la France. GTFS location_type :
-     0 = arrêt, 1 = station/gare, 2 = entrée/sortie, 3 = nœud générique,
-     4 = zone d'embarquement. */
-  const v = {
-    fuseau: e.fuseau || "Europe/Paris",
-    langue: e.langue || "fr",
-    stopId: e.stopId || "abrev",
-    stopCode: e.stopCode || "abrev",
-    wheelchair: e.wheelchair == null ? "0" : String(e.wheelchair),
-    locGare: e.locGare == null ? "1" : String(e.locGare),
-    locEntree: e.locEntree == null ? "2" : String(e.locEntree),
-    locAutre: e.locAutre == null ? "3" : String(e.locAutre),
-    netexProfil: e.netexProfil || "NeTEx standard",
-    netexPrefixe: e.netexPrefixe || "",
-    netexVersion: e.netexVersion || "1"
-  };
-  const locOptions = [["0", "0 — Arrêt (stop)"], ["1", "1 — Station / gare"], ["2", "2 — Entrée / sortie"], ["3", "3 — Nœud générique"], ["4", "4 — Zone d'embarquement"]];
-  const sel = (id, val, opts) => `<select id="${id}">${opts.map(([x, l]) => `<option value="${x}" ${val === x ? "selected" : ""}>${l}</option>`).join("")}</select>`;
-  const f = core.h(`<form class="panneau-travail">
-    <h3>⚙ Paramétrage de l'export GTFS / NeTEx</h3>
-    <p class="info-txt">Ces réglages valent pour TOUS les arrêts et lieux de l'instance. Ils alimentent les futurs exports : GTFS (fichier stops.txt) et NeTEx (StopPlace).</p>
-
-    <h4>GTFS — general (agency.txt / feed_info.txt)</h4>
-    <div class="grille">
-      <div class="champ"><label>Fuseau horaire (agency_timezone)</label>
-        <input id="x-fuseau" list="x-fuseaux" value="${core.esc(v.fuseau)}"/>
-        <datalist id="x-fuseaux"><option value="Europe/Paris"></option><option value="Europe/Brussels"></option><option value="Europe/Zurich"></option><option value="Europe/London"></option></datalist></div>
-      <div class="champ"><label>Langue du feed (feed_lang)</label>
-        <input id="x-langue" maxlength="8" value="${core.esc(v.langue)}"/></div>
-    </div>
-
-    <h4>GTFS — stops.txt</h4>
-    <div class="grille">
-      <div class="champ"><label>Identifiant stop_id tiré de</label>
-        ${sel("x-stopid", v.stopId, [["abrev", "L'abréviation (recommandé)"], ["id", "L'identifiant interne"]])}</div>
-      <div class="champ"><label>Code stop_code (public)</label>
-        ${sel("x-stopcode", v.stopCode, [["abrev", "L'abréviation (recommandé)"], ["aucun", "Pas de code (vide)"]])}</div>
-      <div class="champ"><label>Accès PMR par défaut (wheelchair_boarding)</label>
-        ${sel("x-pmr", v.wheelchair, [["0", "0 — Inconnu"], ["1", "1 — Accessible"], ["2", "2 — Non accessible"]])}</div>
-    </div>
-    <p class="info-txt">Correspondance automatique des LIEUX vers location_type (le parent_station de l'arrêt) :</p>
-    <div class="grille">
-      <div class="champ"><label>Lieu « Gare / Station » exporté comme</label>
-        ${sel("x-locgare", v.locGare, locOptions)}</div>
-      <div class="champ"><label>Lieu « Passerelle / Entrée » exporté comme</label>
-        ${sel("x-locentree", v.locEntree, locOptions)}</div>
-      <div class="champ"><label>Autre caractéristique exportée comme</label>
-        ${sel("x-locautre", v.locAutre, locOptions)}</div>
-    </div>
-    <p class="info-txt">Les arrêts sont exportés en location_type 0, rattachés à leur lieu (parent_station) ; leurs coordonnées propres (V2.4) remplissent stop_lat / stop_lon.</p>
-
-    <h4>NeTEx — StopPlace</h4>
-    <div class="grille">
-      <div class="champ"><label>Profil NeTEx</label>
-        ${sel("x-netexprofil", v.netexProfil, [["NeTEx standard", "NeTEx standard (EN 12896)"], ["NeTEx France", "NeTEx France (profil transmodel)"], ["SIRI", "SIRI / NeTEx temps réel"]])}</div>
-      <div class="champ"><label>Préfixe d'identifiants (code space)</label>
-        <input id="x-netexprefixe" placeholder="Ex. FR-Star (vide = aucun)" value="${core.esc(v.netexPrefixe)}"/></div>
-      <div class="champ"><label>Version des objets exportés</label>
-        <input id="x-netexversion" placeholder="Ex. 1" value="${core.esc(v.netexVersion)}"/></div>
-    </div>
-    <p class="info-txt">NeTEx utilise la même correspondance des lieux (StopPlace / Access / Quay) : la « Gare » devient un StopPlace, ses arrêts des Quays, une « Passerelle » une Access.</p>
-
-    <div class="actions"><button type="button" class="b-blanc" id="x-fermer">Annuler</button>
-    <button type="submit" class="b-bleu">Enregistrer</button></div>
-    <div id="x-erreurs"></div>
-  </form>`);
-  f.onsubmit = (ev) => {
-    ev.preventDefault();
-    d.topo.export = {
-      fuseau: f.querySelector("#x-fuseau").value.trim() || "Europe/Paris",
-      langue: f.querySelector("#x-langue").value.trim() || "fr",
-      stopId: f.querySelector("#x-stopid").value,
-      stopCode: f.querySelector("#x-stopcode").value,
-      wheelchair: Number(f.querySelector("#x-pmr").value),
-      locGare: Number(f.querySelector("#x-locgare").value),
-      locEntree: Number(f.querySelector("#x-locentree").value),
-      locAutre: Number(f.querySelector("#x-locautre").value),
-      netexProfil: f.querySelector("#x-netexprofil").value,
-      netexPrefixe: f.querySelector("#x-netexprefixe").value.trim(),
-      netexVersion: f.querySelector("#x-netexversion").value.trim() || "1"
-    };
-    core.sauver();
-    f.closest(".modal-fond").remove();
-    core.rafraichir();
-  };
-  f.querySelector("#x-fermer").onclick = () => f.closest(".modal-fond").remove();
-  core.modal(f);
-}
