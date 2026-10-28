@@ -49,7 +49,7 @@
     color: var(--primary); font-size: 1.2rem;
   }
   .logo { font-weight: 800; color: var(--text); font-size: 17px; cursor: pointer; background: none; border: none; }
-  .conteneur { width: min(1210px, calc(100% - 32px)); margin: 22px auto 40px; padding: 0; }
+  .conteneur { width: min(1210px, calc(100% - 32px)); margin: 22px auto 14px; padding: 0; }
   h1, h2, h3 { margin: 0 0 12px; }
   h1 { font-size: clamp(1.6rem, 2.4vw, 2.1rem); }
   h2 { font-size: 1.35rem; }
@@ -110,6 +110,7 @@
     .item-objet .obj-suppr.armed { color: #fff; background: var(--danger); border-radius: 6px; }
     .item-objet.survol { background: rgba(29,180,166,0.22); outline: 1px solid var(--secondary); }
     .tableau-page .enveloppe-table { max-height: calc(100vh - 310px); min-height: 180px; }
+    #contenu .enveloppe-table { max-height: calc(100vh - 330px); overflow-y: auto; min-height: 140px; }
   /* IMPORTANT (bug V2.2.1) : pour que les fenêtres modales (pop-up ⚙,
      création d'arrêt…) passent AU-DESSUS de la carte Leaflet (dont les
      calques vont jusqu'à z-index 1000), le z-index: 3000 est réglé
@@ -1071,6 +1072,19 @@ function vueEspaceTravail(u) {
       contenu.appendChild(h(`<p class="erreur">Le module « ${esc(m.onglet)} » a échoué : ${esc(e.message)}</p>`));
     }
   });
+  /* V2.3.1 « une page = un écran » : après chaque affichage, on MESURE la
+     place restante sous chaque grande liste (tableaux de lignes/arrêts,
+     liste réseaux & contrats) et on lui pose un plafond de hauteur exact :
+     elle défile en INTERNE, la page ne dépasse plus l'écran. Le setTimeout
+     laisse le navigateur poser les éléments avant la mesure. */
+  setTimeout(() => {
+    try {
+      racine.querySelectorAll("#contenu .enveloppe-table, #contenu #liste").forEach(el => {
+        const r = el.getBoundingClientRect();
+        if (r.top > 0) el.style.maxHeight = Math.max(160, window.innerHeight - r.top - 28) + "px";
+      });
+    } catch (e) { /* mesure impossible : on garde le plafond CSS de secours */ }
+  }, 0);
   return racine;
 }
 
@@ -2639,4 +2653,5 @@ rafraichir();
 <script src="modules/topo/manifeste.js"></script>
 </body>
 </html>
+
 
