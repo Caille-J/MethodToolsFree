@@ -103,6 +103,13 @@
   .topo-carte { position: relative; height: 100%; min-height: 0; border-radius: 20px; overflow: hidden; background: #e5eaf0; }
   .topo-carte > div:first-child { position: absolute; inset: 0; height: 100%; }
     .topo-carte #topo-carte-fallback { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 20px; pointer-events: none; }
+    /* ---- V2.3 : croix ✕ de l'explorateur, surbrillance de survol,
+         tableau des arrêts plein écran (défilement interne) ---- */
+    .item-objet .obj-suppr { float: right; border: none; background: none; color: #94a3b8; font-weight: 800; padding: 0 4px; cursor: pointer; font-size: 13px; }
+    .item-objet .obj-suppr:hover { color: var(--danger); }
+    .item-objet .obj-suppr.armed { color: #fff; background: var(--danger); border-radius: 6px; }
+    .item-objet.survol { background: rgba(29,180,166,0.22); outline: 1px solid var(--secondary); }
+    .tableau-page .enveloppe-table { max-height: calc(100vh - 310px); min-height: 180px; }
   /* IMPORTANT (bug V2.2.1) : pour que les fenêtres modales (pop-up ⚙,
      création d'arrêt…) passent AU-DESSUS de la carte Leaflet (dont les
      calques vont jusqu'à z-index 1000), le z-index: 3000 est réglé
@@ -1002,16 +1009,23 @@ function vueEspaceTravail(u) {
       </span>
     </div>
     <div class="conteneur" id="haut-travail"></div>
-    <div class="conteneur" id="contenu" ${App.vue === "lignes" || App.vue === "vue" || (App.vue || "").indexOf("mod:") === 0 ? 'style="width:calc(100% - 32px);max-width:none;"' : ""}></div>
+    <div class="conteneur" id="contenu" ${App.vue === "lignes" || App.vue === "arrets" || App.vue === "vue" || (App.vue || "").indexOf("mod:") === 0 ? 'style="width:calc(100% - 32px);max-width:none;"' : ""}></div>
   </div>`);
   racine.querySelector("#retour-accueil").onclick = () => { App.instanceOuverte = null; App.colonnes = null; rafraichir(); };
   const haut = racine.querySelector("#haut-travail");
-  if (App.vue !== "mod:topo") haut.appendChild(resume);
+  /* V2.3 : le résumé des statistiques se PLIE (demande de Jules) pour
+     laisser toute la place au tableau quand on travaille. */
+  if (App.vue !== "mod:topo") {
+    const bResume = h(`<button class="petit">${App.resumePlié ? "▸ Déplier le résumé" : "▾ Plier le résumé"}</button>`);
+    bResume.onclick = () => { App.resumePlié = !App.resumePlié; rafraichir(); };
+    haut.appendChild(bResume);
+    if (!App.resumePlié) haut.appendChild(resume);
+  }
   const bande = racine.querySelector("#bande-modules");
-  const dansDef = (App.vue === "lignes" || App.vue === "vue");
+  const dansDef = (App.vue === "lignes" || App.vue === "vue" || App.vue === "arrets");
   /* 1er module de la bande : Définition réseau (lignes + réseaux & contrats). */
   const bDef = h(`<button class="onglet ${dansDef ? "actif" : ""}" title="Lignes, réseaux et contrats">🚏 Définition réseau</button>`);
-  bDef.onclick = () => { if (App.vue !== "lignes" && App.vue !== "vue") App.vue = "lignes"; rafraichir(); };
+  bDef.onclick = () => { if (App.vue !== "lignes" && App.vue !== "vue" && App.vue !== "arrets") App.vue = "lignes"; rafraichir(); };
   bande.appendChild(bDef);
   /* Puis chaque module enregistré via la fiche (ex. 🗺️ Topologie) : la bande
      s'agrandit au fil et à mesure des modules. Un module absent ou cassé ne
@@ -1031,13 +1045,19 @@ function vueEspaceTravail(u) {
      des lignes et la vue réseaux & contrats (rien n'est perdu). */
   if (dansDef) {
     const sous = h(`<div class="onglets sous-onglets"></div>`);
-    [["lignes", "🚏 Toutes les lignes"], ["vue", "🚌 Réseaux & contrats"]].forEach(([cle, label]) => {
+    [["lignes", "🚏 Toutes les lignes"], ["arrets", "📍 Arrêts"], ["vue", "🚌 Réseaux & contrats"]].forEach(([cle, label]) => {
       const b = h(`<button class="onglet ${App.vue === cle ? "actif" : ""}">${label}</button>`);
       b.onclick = () => { App.vue = cle; rafraichir(); };
       sous.appendChild(b);
     });
     contenu.appendChild(sous);
-    contenu.appendChild(App.vue === "lignes" ? vueLignes() : vueReseauxContrats());
+    if (App.vue === "arrets") {
+      try { contenu.appendChild(Topo.vueArrets(dOng, Hastus.core)); }
+      catch (e) {
+        afficherErreur("Vue Arrêts : " + e.message);
+        contenu.appendChild(h(`<p class="erreur">La vue « Arrêts » a échoué : ${esc(e.message)}</p>`));
+      }
+    } else contenu.appendChild(App.vue === "lignes" ? vueLignes() : vueReseauxContrats());
   }
   if (App.vue === "catalogue") contenu.appendChild(vueCatalogue());
   /* Chaque module fournit SA vue (données de l'instance + fiche). Ses
@@ -2514,6 +2534,31 @@ function lancerTests() {
       assert(r2.ok && d.topo.lieux.length === 1, "Aucun lieu supplémentaire ne doit être créé");
       assert(r2.arret.lieuId === lieuId, "L'arrêt est rattaché au lieu existant");
     });
+    test("V2.3 : modifierArret/supprimerArret — les coordonnées vivent sur le LIEU", () => {
+      const d = Noyau.instanceNeuve(); Topo.init(d);
+      const r1 = Topo.creerArret(d, { nom: "Gare", abrev: "GAR", lat: 48.1, lng: -1.6 });
+      const r2 = Topo.creerArret(d, { nom: "Halles", abrev: "HAL", lat: 1, lng: 2 });
+      assert(r1.ok && r2.ok, "Les 2 créations doivent réussir");
+      const idA = r1.arret.id, idLieu = r1.arret.lieuId;
+      const rm = Topo.modifierArret(d, idA, { nom: "Gare Centre", abrev: "GCE", lieuId: idLieu, lat: 5, lng: 6 });
+      assert(rm.ok, "La modification doit réussir : " + (rm.erreurs || []).join(" "));
+      assert(d.topo.arrets.find(a => a.id === idA).abrev === "GCE", "L'arrêt doit être renommé");
+      assert(d.topo.lieux.find(l => l.id === idLieu).lat === 5, "La latitude modifiée doit s'appliquer au LIEU rattaché");
+      const rd = Topo.modifierArret(d, idA, { nom: "X", abrev: "hal" });
+      assert(!rd.ok, "Un doublon d'abréviation d'arrêt doit être refusé (même casse)");
+      const rs = Topo.supprimerArret(d, idA);
+      assert(rs.ok && d.topo.arrets.length === 1 && d.topo.lieux.length === 2, "L'arrêt supprimé, son lieu conservé");
+      assert(Topo.supprimerLieu(d, idLieu).ok, "Le lieu devenu libre est supprimable");
+    });
+    test("V2.3 : supprimerLieu refusé si un arrêt y est rattaché ; modifierLieu ok", () => {
+      const d = Noyau.instanceNeuve(); Topo.init(d);
+      const r = Topo.creerArret(d, { nom: "Gare", abrev: "GAR", lat: 1, lng: 2 });
+      const idLieu = r.arret.lieuId;
+      assert(!Topo.supprimerLieu(d, idLieu).ok, "La suppression d'un lieu utilisé doit être refusée");
+      const rm = Topo.modifierLieu(d, idLieu, { nom: "Gare TGV", abrev: "GTGV", lat: 3, lng: 4 });
+      assert(rm.ok, "modifierLieu doit réussir : " + (rm.erreurs || []).join(" "));
+      assert(d.topo.lieux.find(l => l.id === idLieu).nom === "Gare TGV" && d.topo.lieux.find(l => l.id === idLieu).lat === 3, "Le lieu doit être modifié");
+    });
   }
 
   // Affichage du rapport de tests.
@@ -2590,6 +2635,8 @@ rafraichir();
 <script src="modules/topo/donnees.js"></script>
 <script src="modules/topo/carte.js"></script>
 <script src="modules/topo/vue.js"></script>
+<script src="modules/topo/tableau.js"></script>
 <script src="modules/topo/manifeste.js"></script>
 </body>
 </html>
+

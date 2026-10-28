@@ -101,5 +101,76 @@ window.Topo = (() => {
     return { ok: true, arret: a, lieu: lieu };
   }
 
-  return { SCHEMA, init, nouvelId, abrevAuto, validerLieu, creerLieu, validerArret, creerArret };
+
+/* ---- V2.3 : CRUD complet des arrêts et des lieux ----
+   Validation inline (autonome) : nom 64 car. obligatoire, abréviation
+   8 car. obligatoire et unique (sans casse, soi-même ignoré), lieu
+   obligatoirement existant. Les coordonnées appartiennent au LIEU :
+   modifier lat/lng d'un arrêt déplace son lieu. */
+
+function modifierArret(d, idArret, c) {
+  const a = d.topo.arrets.find(x => x.id === idArret);
+  if (!a) return { ok: false, erreurs: ["Arrêt introuvable."] };
+  const nom = (c.nom || "").trim(), abrev = (c.abrev || "").trim();
+  const errs = [];
+  if (!nom) errs.push("Nom obligatoire.");
+  else if (nom.length > 64) errs.push("Nom : 64 caractères maximum.");
+  if (!abrev) errs.push("Abréviation obligatoire.");
+  else if (abrev.length > 8) errs.push("Abréviation : 8 caractères maximum.");
+  else if (d.topo.arrets.some(x => x.id !== idArret && (x.abrev || "").toLowerCase() === abrev.toLowerCase()))
+    errs.push("Abréviation déjà utilisée par un autre arrêt.");
+  if (c.lieuId !== undefined && c.lieuId !== null && !d.topo.lieux.some(l => l.id === c.lieuId))
+    errs.push("Lieu introuvable.");
+  if (errs.length) return { ok: false, erreurs: errs };
+  a.nom = nom; a.abrev = abrev;
+  if (c.lieuId !== undefined && c.lieuId !== a.lieuId) {
+    if (!c.lieuId) return { ok: false, erreurs: ["Un arrêt doit toujours appartenir à un lieu."] };
+    a.lieuId = c.lieuId;
+  }
+  if (c.lat != null || c.lng != null) {
+    const l = d.topo.lieux.find(x => x.id === a.lieuId);
+    if (l) { if (c.lat != null) l.lat = Number(c.lat); if (c.lng != null) l.lng = Number(c.lng); }
+  }
+  return { ok: true, arret: a };
+}
+
+function supprimerArret(d, idArret) {
+  const n = d.topo.arrets.length;
+  d.topo.arrets = d.topo.arrets.filter(x => x.id !== idArret);
+  /* Un arrêt supprimé n'efface JAMAIS son lieu : d'autres arrêts peuvent
+     l'utiliser, et les données topographiques restent utiles. */
+  return d.topo.arrets.length < n ? { ok: true } : { ok: false, erreurs: ["Arrêt introuvable."] };
+}
+
+function modifierLieu(d, idLieu, c) {
+  const l = d.topo.lieux.find(x => x.id === idLieu);
+  if (!l) return { ok: false, erreurs: ["Lieu introuvable."] };
+  const nom = (c.nom || "").trim(), abrev = (c.abrev || "").trim();
+  const errs = [];
+  if (!nom) errs.push("Nom obligatoire.");
+  else if (nom.length > 64) errs.push("Nom : 64 caractères maximum.");
+  if (!abrev) errs.push("Abréviation obligatoire.");
+  else if (abrev.length > 8) errs.push("Abréviation : 8 caractères maximum.");
+  else if (d.topo.lieux.some(x => x.id !== idLieu && (x.abrev || "").toLowerCase() === abrev.toLowerCase()))
+    errs.push("Abréviation déjà utilisée par un autre lieu.");
+  if (errs.length) return { ok: false, erreurs: errs };
+  l.nom = nom; l.abrev = abrev;
+  if (c.lat != null) l.lat = Number(c.lat);
+  if (c.lng != null) l.lng = Number(c.lng);
+  return { ok: true, lieu: l };
+}
+
+function supprimerLieu(d, idLieu) {
+  const l = d.topo.lieux.find(x => x.id === idLieu);
+  if (!l) return { ok: false, erreurs: ["Lieu introuvable."] };
+  /* Règle métier : un lieu utilisé par des arrêts ne se supprime pas
+     (même logique que les labels du catalogue V1). */
+  const utilises = d.topo.arrets.filter(a => a.lieuId === idLieu);
+  if (utilises.length) return { ok: false, erreurs: ["Impossible : " + utilises.length + " arrêt(s) rattaché(s) à ce lieu. Détachez-les d'abord."] };
+  d.topo.lieux = d.topo.lieux.filter(x => x.id !== idLieu);
+  return { ok: true };
+}
+
+  return { SCHEMA, init, nouvelId, abrevAuto, validerLieu, creerLieu, validerArret, creerArret,
+         modifierArret, supprimerArret, modifierLieu, supprimerLieu };
 })();
