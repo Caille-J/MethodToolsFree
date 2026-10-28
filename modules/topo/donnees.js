@@ -10,14 +10,26 @@
 "use strict";
 window.Topo = (() => {
 
-  const SCHEMA = "topo-2";   // topo-1 : lieux seulement. topo-2 : + arrêts.
+  const SCHEMA = "topo-3";   // topo-1 : lieux. topo-2 : + arrêts (GPS sur le lieu). topo-3 : + GPS propre à chaque arrêt + caractéristique des lieux.
 
   /* Migration paresseuse : crée l'espace topo à la volée, ou complète
-     une instance topo-1 (avant les arrêts) sans jamais rien casser. */
+     une instance topo-1/topo-2 sans jamais rien casser. */
   function init(d) {
     if (!d.topo) d.topo = { version: SCHEMA, lieux: [], arrets: [] };
     if (!Array.isArray(d.topo.lieux)) d.topo.lieux = [];
     if (!Array.isArray(d.topo.arrets)) d.topo.arrets = [];   // migration topo-1 → topo-2
+    /* Migration topo-2 → topo-3 (V2.4, demande de Jules) : les arrêts
+       portent leur PROPRE GPS, indépendant du lieu. Un arrêt existant
+       hérite des coordonnées de son lieu (jusqu'ici elles étaient
+       communes) ; ensuite, déplacer un arrêt ne déplacera PLUS le lieu. */
+    if (d.topo.version !== SCHEMA) {
+      const parLieu = new Map(d.topo.lieux.map(l => [l.id, l]));
+      d.topo.arrets.forEach(a => {
+        const l = parLieu.get(a.lieuId);
+        if (a.lat == null && l && l.lat != null) a.lat = l.lat;
+        if (a.lng == null && l && l.lng != null) a.lng = l.lng;
+      });
+    }
     d.topo.version = SCHEMA;
     return d.topo;
   }
@@ -48,6 +60,7 @@ window.Topo = (() => {
     else if (lieu.abrev.trim().length > 8) errs.push("Abréviation : 8 caractères maximum.");
     else if (d.topo.lieux.some(l => l.abrev.toLowerCase() === lieu.abrev.trim().toLowerCase()
               && l.id !== ignoreId)) errs.push("Abréviation déjà utilisée dans cette instance.");
+    if (lieu.caract && String(lieu.caract).trim().length > 32) errs.push("Caractéristique : 32 caractères maximum.");
     return errs;
   }
 
@@ -56,6 +69,7 @@ window.Topo = (() => {
     const errs = validerLieu(d, lieu);
     if (errs.length) return { ok: false, erreurs: errs };
     const l = { id: nouvelId(d), nom: lieu.nom.trim(), abrev: lieu.abrev.trim(),
+                caract: String(lieu.caract || "").trim(),
                 lat: lieu.lat == null ? null : Number(lieu.lat),
                 lng: lieu.lng == null ? null : Number(lieu.lng), codes: {} };
     d.topo.lieux.push(l);
@@ -96,7 +110,10 @@ window.Topo = (() => {
       lieu = r.lieu;
     }
     const a = { id: nouvelId(d), nom: arret.nom.trim(), abrev: arret.abrev.trim(),
-                lieuId: lieu.id, codes: {} };
+                lieuId: lieu.id,
+                lat: arret.lat == null ? null : Number(arret.lat),    // V2.4 : GPS PROPRE à l'arrêt
+                lng: arret.lng == null ? null : Number(arret.lng),
+                codes: {} };
     d.topo.arrets.push(a);
     return { ok: true, arret: a, lieu: lieu };
   }
@@ -127,10 +144,11 @@ function modifierArret(d, idArret, c) {
     if (!c.lieuId) return { ok: false, erreurs: ["Un arrêt doit toujours appartenir à un lieu."] };
     a.lieuId = c.lieuId;
   }
-  if (c.lat != null || c.lng != null) {
-    const l = d.topo.lieux.find(x => x.id === a.lieuId);
-    if (l) { if (c.lat != null) l.lat = Number(c.lat); if (c.lng != null) l.lng = Number(c.lng); }
-  }
+  /* V2.4 : les coordonnées vivent sur l'ARRÊT lui-même. Déplacer un
+     arrêt ne déplace JAMAIS son lieu (demande explicite de Jules).
+     null = effacer la coordonnée ; absent = ne pas y toucher. */
+  if (c.lat !== undefined) a.lat = (c.lat === null || c.lat === "") ? null : Number(c.lat);
+  if (c.lng !== undefined) a.lng = (c.lng === null || c.lng === "") ? null : Number(c.lng);
   return { ok: true, arret: a };
 }
 
@@ -155,8 +173,11 @@ function modifierLieu(d, idLieu, c) {
     errs.push("Abréviation déjà utilisée par un autre lieu.");
   if (errs.length) return { ok: false, erreurs: errs };
   l.nom = nom; l.abrev = abrev;
-  if (c.lat != null) l.lat = Number(c.lat);
-  if (c.lng != null) l.lng = Number(c.lng);
+  /* V2.4 : caractéristique du lieu (gare, passerelle… cf. GTFS) —
+     champ libre, effaçable. null/absent = ne pas y toucher selon cas. */
+  if (c.caract !== undefined) l.caract = String(c.caract || "").trim();
+  if (c.lat !== undefined) l.lat = (c.lat === null || c.lat === "") ? null : Number(c.lat);
+  if (c.lng !== undefined) l.lng = (c.lng === null || c.lng === "") ? null : Number(c.lng);
   return { ok: true, lieu: l };
 }
 
@@ -174,3 +195,4 @@ function supprimerLieu(d, idLieu) {
   return { SCHEMA, init, nouvelId, abrevAuto, validerLieu, creerLieu, validerArret, creerArret,
          modifierArret, supprimerArret, modifierLieu, supprimerLieu };
 })();
+

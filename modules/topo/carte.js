@@ -11,7 +11,11 @@
      épingles ; ② survol explorateur ↔ carte : surbrillance(id) met
      l'objet en évidence sur la carte, et le survol d'un objet de la
      carte prévient l'explorateur (callback survol) ; ③ sélection
-     conservée (clic sur un point). */
+     conservée (clic sur un point).
+   V2.4 : les lieux (tous) sont des CARRÉS dans leur PROPRE couche,
+     affichée ou masquée via le pop-up ⚙ (demande de Jules) ; les
+     arrêts sont dessinés à LEURS coordonnées propres (le GPS
+     appartient à l'arrêt depuis la V2.4, plus au lieu). */
 "use strict";
 window.TopoCarte = (() => {
 
@@ -21,10 +25,10 @@ window.TopoCarte = (() => {
     relief: { nom: "Relief (OpenTopoMap)", url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", attrib: "OpenTopoMap (CC-BY-SA)" }
   };
 
-  /* Styles des points : arrêts (bleu plein), lieux libres (gris),
-     objet survolé/surligné (contour orange, plus gros). */
+  /* Styles des points : arrêts (bleu plein), lieux (CARRÉS gris,
+     V2.4), objet survolé/surligné (contour orange, plus gros). */
   const STYLE_ARRET = { radius: 8, color: "#0a4ab5", weight: 2, fillColor: "#1266e5", fillOpacity: 0.95 };
-  const STYLE_LIEU = { radius: 6, color: "#64748b", weight: 2, fillColor: "#cbd5e1", fillOpacity: 1 };
+  const STYLE_LIEU = { color: "#64748b", weight: 2, fillColor: "#cbd5e1", fillOpacity: 1 };
   const STYLE_SURBRILLANCE = { radius: 12, color: "#f59e0b", weight: 4, fillColor: "#f59e0b", fillOpacity: 0.95 };
 
   let carte = null, fondCourant = null, coucheArrets = null, coucheLieux = null;
@@ -86,20 +90,41 @@ window.TopoCarte = (() => {
     couche.addLayer(m);
   }
 
+  /* V2.4 : fabrique un CARRÉ de lieu (rectangle Leaflet ~40 m de côté),
+     interactif exactement comme un point. Les carrés vivent dans la
+     couche « lieux », que le pop-up ⚙ affiche ou masque. */
+  function carreLieu(lat, lng, popupHtml, objet, opts) {
+    const dLat = 0.00035, dLng = 0.00055;
+    const m = L.rectangle([[lat - dLat / 2, lng - dLng / 2], [lat + dLat / 2, lng + dLng / 2]], STYLE_LIEU);
+    m._styleNormal = STYLE_LIEU;
+    m.bindPopup(popupHtml);
+    if (opts && opts.etiquettes) m.bindTooltip(escLocal(objet.nom), { permanent: true, direction: "top", className: "topo-etiquette" });
+    m.on("click", () => { if (opts && opts.selection) opts.selection(objet); });
+    m.on("mouseover", () => { if (opts && opts.survol) opts.survol(objet.id); surbrillance(objet.id); });
+    m.on("mouseout", () => { if (opts && opts.survol) opts.survol(null); surbrillance(null); });
+    marqueurs.set(objet.id, m);
+    coucheLieux.addLayer(m);
+  }
+
   /* Redessine les POINTS d'arrêts (items {id, nom, abrev, lat, lng})
-     PUIS les lieux sans arrêt (opts.lieuxLibres) en points gris. */
+     PUIS les lieux (V2.4 : TOUS les lieux géolocalisés, en CARRÉS —
+     opts.lieux ; compatibilité : opts.lieuxLibres accepté aussi). */
   function majArrets(arrets, opts) {
     if (!carte || !coucheArrets) return;
     coucheArrets.clearLayers();
+    if (coucheLieux) coucheLieux.clearLayers();
     marqueurs.clear();
     idSurligne = null;
     arrets.forEach(a => {
       if (a.lat == null || a.lng == null) return;      // arrêt pas encore géolocalisé.
       point(a.lat, a.lng, STYLE_ARRET, "<b>" + escLocal(a.nom) + "</b><br><small>Arrêt " + escLocal(a.abrev) + "</small>", a, opts, coucheArrets);
     });
-    if (opts && opts.lieuxLibres) opts.lieuxLibres.forEach(l => {
+    const lieuxDessiner = (opts && (opts.lieux || opts.lieuxLibres)) || [];
+    lieuxDessiner.forEach(l => {
       if (l.lat == null || l.lng == null) return;
-      point(l.lat, l.lng, STYLE_LIEU, "<b>" + escLocal(l.nom) + "</b><br><small>Lieu (sans arrêt rattaché)</small>", l, opts, coucheArrets);
+      carreLieu(l.lat, l.lng,
+        "<b>" + escLocal(l.nom) + "</b><br><small>Lieu" + (l.caract ? " — " + escLocal(l.caract) : "") + "</small>",
+        l, opts);
     });
   }
 
@@ -133,3 +158,4 @@ window.TopoCarte = (() => {
 
   return { init, dispo, clic, centrer, majArrets, surbrillance, appliquer };
 })();
+

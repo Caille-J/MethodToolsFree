@@ -20,33 +20,34 @@ function topoEtat() {
     reglages: { fond: "plan", couches: { arrets: true, lieux: false }, etiquettes: true },
     creation: false,      // bouton « Créer un arrêt » armé ?
     popover: null,        // cartouche dont la liste est ouverte ("reseaux"…)
-    selection: null        // id de l'objet sélectionné (explorateur/carte)
+    selection: null,       // id de l'objet sélectionné (explorateur/carte)
+    ples: { reseaux: true, lignes: true, arrets: true, lieux: true },   // V2.4 : catégories pliées de l'explorateur (true = dépliée)
+    recherche: ""          // V2.4 : recherche de l'explorateur
   };
+  if (!App.topo.ples) App.topo.ples = { reseaux: true, lignes: true, arrets: true, lieux: true };
+  if (App.topo.recherche === undefined) App.topo.recherche = "";
   return App.topo;
 }
 
 /* ----- CASCADE DE FILTRES ----- */
+/* V2.4 : les cartouches Réseaux et Lignes ont été retirées (demande de
+   Jules) — seul le filtre « Groupes de lignes » subsiste. */
 
-/* Lignes visibles selon les réseaux ET groupes sélectionnés. */
+/* Lignes visibles selon les groupes sélectionnés. */
 function lignesAffichables(d, t) {
   const f = t.filtres;
   let ls = d.lignes;
-  if (f.reseaux.length) ls = ls.filter(l => f.reseaux.includes(l.reseauId));
   if (f.groupes.length) ls = ls.filter(l => f.groupes.includes(l.groupe));
   return ls;
 }
 
-/* Groupes présents dans les lignes des réseaux sélectionnés. */
+/* Groupes présents dans les lignes. */
 function groupesAffichables(d, t) {
-  const f = t.filtres;
-  let ls = d.lignes;
-  if (f.reseaux.length) ls = ls.filter(l => f.reseaux.includes(l.reseauId));
-  return [...new Set(ls.map(l => l.groupe).filter(g => g))];
+  return [...new Set(d.lignes.map(l => l.groupe).filter(g => g))];
 }
 
 /* Après chaque changement : retire les sélections devenues hors cascade. */
 function harmoniserFiltres(d, t) {
-  t.filtres.lignes = t.filtres.lignes.filter(id => lignesAffichables(d, t).some(l => l.id === id));
   t.filtres.groupes = t.filtres.groupes.filter(g => groupesAffichables(d, t).includes(g));
 }
 
@@ -99,20 +100,16 @@ window.Topo.vue = (d, core) => {
   return racine;
 };
 
-/* Objets à afficher sur la carte : les arrêts (points bleus, avec les
-   coordonnées de leur lieu) ET les lieux sans aucun arrêt rattaché
-   (points gris) — tout ce qui est géolocalisé, comme l'explorateur. */
+/* Objets à afficher sur la carte : les arrêts (points bleus, à LEURS
+   coordonnées propres — V2.4) ET tous les lieux géolocalisés (carrés
+   gris, couche activable dans ⚙). */
 function objetsCarte(d) {
-  const lieux = new Map(d.topo.lieux.map(l => [l.id, l]));
-  const utilises = new Set(d.topo.arrets.map(a => a.lieuId).filter(Boolean));
-  const arrets = d.topo.arrets.map(a => {
-    const l = lieux.get(a.lieuId) || {};
-    return { id: a.id, nom: a.nom, abrev: a.abrev, lat: l.lat == null ? null : l.lat, lng: l.lng == null ? null : l.lng };
-  });
-  const lieuxLibres = d.topo.lieux
-    .filter(l => !utilises.has(l.id) && l.lat != null && l.lng != null)
-    .map(l => ({ id: l.id, nom: l.nom, abrev: l.abrev, lat: l.lat, lng: l.lng }));
-  return { arrets, lieuxLibres };
+  const arrets = d.topo.arrets.map(a =>
+    ({ id: a.id, nom: a.nom, abrev: a.abrev, lat: a.lat == null ? null : a.lat, lng: a.lng == null ? null : a.lng }));
+  const lieux = d.topo.lieux
+    .filter(l => l.lat != null && l.lng != null)
+    .map(l => ({ id: l.id, nom: l.nom, abrev: l.abrev, caract: l.caract || "", lat: l.lat, lng: l.lng }));
+  return { arrets, lieux };
 }
 
 function rafraichirMarqueurs(d, core) {
@@ -120,7 +117,7 @@ function rafraichirMarqueurs(d, core) {
   const o = objetsCarte(d);
   TopoCarte.majArrets(o.arrets, {
     etiquettes: t.reglages.etiquettes,
-    lieuxLibres: o.lieuxLibres,                    // lieux sans arrêt : points gris
+    lieux: o.lieux,                                  // V2.4 : TOUS les lieux, en carrés (couche ⚙)
     selection: (a) => { t.selection = a.id; core.rafraichir(); },
     /* Survol d'un point de la carte : surligne l'objet dans l'explorateur
        (modification directe du DOM, sans réaffichage complet : survoler
@@ -137,11 +134,13 @@ function rafraichirMarqueurs(d, core) {
 /* ----- CARTOUCHES DE FILTRE ----- */
 
 function dessinerCartouches(zone, d, core, t) {
-  /* Libellé explicite : on comprend que ces bulles sont des FILTRES. */
+  /* Libellé explicite : on comprend que ces bulles sont des FILTRES.
+     V2.4 : seuls les GROUPES DE LIGNES restent (demande de Jules) —
+     les cartouches Réseaux et Lignes ont été retirées. */
   zone.appendChild(core.h(`<span class="filtres-libelle">🔎 Filtrer :</span>`));
-  [["reseaux", "🚌 Réseaux"], ["lignes", "🚏 Lignes"], ["groupes", "🗂️ Groupes de lignes"]].forEach(([cle, label]) => {
+  [["groupes", "🗂️ Groupes de lignes"]].forEach(([cle, label]) => {
     const nb = t.filtres[cle].length;
-    const b = core.h(`<button class="cartouche ${nb ? "actif" : ""}" title="Filtrer par ${label.slice(2)} — cliquez pour choisir">${label}${nb ? ` <span class="etiquette">${nb}</span>` : ""}<span class="loupe">🔍</span></button>`);
+    const b = core.h(`<button class="cartouche ${nb ? "actif" : ""}" title="Filtrer par groupes de lignes — cliquez pour choisir">${label}${nb ? ` <span class="etiquette">${nb}</span>` : ""}<span class="loupe">🔍</span></button>`);
     b.onclick = () => { t.popover = (t.popover === cle) ? null : cle; core.rafraichir(); };
     zone.appendChild(b);
   });
@@ -150,8 +149,6 @@ function dessinerCartouches(zone, d, core, t) {
 
 /* Items d'une cartouche, déjà restreints par la cascade. */
 function itemsFiltre(d, t, cle) {
-  if (cle === "reseaux") return d.reseaux.map(r => ({ cle: r.id, label: r.nom }));
-  if (cle === "lignes") return lignesAffichables(d, t).map(l => ({ cle: l.id, label: l.abrev + " — " + l.nom }));
   return groupesAffichables(d, t).map(g => ({ cle: g, label: g }));
 }
 
@@ -239,65 +236,101 @@ function itemObjet(core, t, cfg) {
   return b;
 }
 
+/* V2.4 : titre de catégorie PLIABLE de l'explorateur. Renvoie true si
+   la catégorie est dépliée (il faut dessiner son contenu). Si l'objet
+   sélectionné vit dans une catégorie pliée, une pastille 🎯 le rappelle
+   (demande de Jules : savoir qu'un filtre/sélection est caché). */
+function titreCategorie(cible, core, t, cle, label, nb, selectionDedans) {
+  const plie = !t.ples[cle];
+  const b = core.h(`<h4 class="explo-titre">${plie ? "▸" : "▾"} ${label} <small>(${nb})</small>${selectionDedans && plie ? ' <span class="etiquette alerte" title="L’objet sélectionné est dans cette catégorie pliée">🎯</span>' : ""}</h4>`);
+  b.onclick = () => { t.ples[cle] = !t.ples[cle]; core.rafraichir(); };
+  cible.appendChild(b);
+  return !plie;
+}
+
 function dessinerExplorateur(cible, d, core) {
   const t = topoEtat();
   const f = t.filtres;
   const lieux = new Map(d.topo.lieux.map(l => [l.id, l]));
-  cible.appendChild(core.h(`<p class="info-txt">Clic : sélectionner (et centrer) · double-clic : fiche de modification · ✕ : supprimer (double clic) · survol : surligner sur la carte.</p>`));
+  cible.appendChild(core.h(`<p class="info-txt">Clic : sélectionner (et centrer) · double-clic : fiche · ✕ : supprimer (double clic) · survol : surligner sur la carte.</p>`));
 
-  /* Réseaux : masqués si exclus par le filtre ; fiche V1 au double-clic
-     (pas de croix : la suppression des réseaux suit les règles métier V1). */
-  cible.appendChild(core.h(`<h4>🚌 Réseaux</h4>`));
-  const reseauxVisibles = d.reseaux.filter(r => !f.reseaux.length || f.reseaux.includes(r.id));
-  if (!d.reseaux.length) cible.appendChild(core.h(`<p class="info-txt">Aucun réseau.</p>`));
-  else if (!reseauxVisibles.length) cible.appendChild(core.h(`<p class="info-txt">Tous les réseaux sont masqués par les filtres.</p>`));
-  reseauxVisibles.forEach(r => cible.appendChild(itemObjet(core, t, {
-    id: r.id, html: core.esc(r.nom), supprimable: false,
-    modifier: () => (typeof modalReseau === "function" ? modalReseau(r.id) : null)
-  })));
+  /* V2.4 : RECHERCHE en haut de l'explorateur — tape pour retrouver un
+     objet précis. Elle se COMBINE avec les filtres (groupes…) : on ne
+     cherche que parmi ce qui est déjà affiché. */
+  const barre = core.h(`<div class="champ" style="margin:4px 0 10px;"><input id="exp-q" value="${core.esc(t.recherche)}" placeholder="🔎 Rechercher un objet (nom, abréviation)…" style="width:100%;"/></div>`);
+  barre.querySelector("input").oninput = (e) => {
+    t.recherche = e.target.value;
+    core.rafraichir();
+    const cible2 = document.getElementById("exp-q");
+    if (cible2) { cible2.focus(); cible2.setSelectionRange(cible2.value.length, cible2.value.length); }
+  };
+  cible.appendChild(barre);
+  const q = String(t.recherche || "").trim().toLowerCase();
+  const cherche = (o) => !q || ((o.nom || "") + " " + (o.abrev || "")).toLowerCase().includes(q);
+  const sel = t.selection;
+  const dans = (liste) => liste.some(x => x.id === sel);
 
-  /* Lignes : idem, fiche V1 (modalLigne) au double-clic. */
-  cible.appendChild(core.h(`<h4>🚏 Lignes</h4>`));
-  const lignesVisibles = d.lignes.filter(l =>
-    (!f.reseaux.length || f.reseaux.includes(l.reseauId))
-    && (!f.groupes.length || f.groupes.includes(l.groupe))
-    && (!f.lignes.length || f.lignes.includes(l.id)));
-  if (!d.lignes.length) cible.appendChild(core.h(`<p class="info-txt">Aucune ligne.</p>`));
-  else if (!lignesVisibles.length) cible.appendChild(core.h(`<p class="info-txt">Toutes les lignes sont masquées par les filtres.</p>`));
-  lignesVisibles.forEach(l => cible.appendChild(itemObjet(core, t, {
-    id: l.id, html: core.esc(l.abrev) + " — " + core.esc(l.nom), supprimable: false,
-    modifier: () => (typeof modalLigne === "function" ? modalLigne(l.id) : null)
-  })));
+  /* ---------- 🚌 Réseaux (pliable, fiche V1, pas de croix : règles V1) ---------- */
+  const reseauxVisibles = d.reseaux.filter(r => cherche(r));
+  const deplieReseaux = titreCategorie(cible, core, t, "reseaux", "🚌 Réseaux", reseauxVisibles.length, dans(d.reseaux.filter(r => cherche(r))));
+  if (deplieReseaux) {
+    if (!d.reseaux.length) cible.appendChild(core.h(`<p class="info-txt">Aucun réseau.</p>`));
+    else if (!reseauxVisibles.length) cible.appendChild(core.h(`<p class="info-txt">Aucun réseau ne correspond${q ? " à la recherche" : ""}.</p>`));
+    reseauxVisibles.forEach(r => cible.appendChild(itemObjet(core, t, {
+      id: r.id, html: core.esc(r.nom), supprimable: false,
+      modifier: () => (typeof modalReseau === "function" ? modalReseau(r.id) : null)
+    })));
+  }
 
-  /* Arrêts : croix de suppression (double-clic), fiche au double-clic,
-     clic = sélection + recentrage, survol = surlignage carte. */
-  cible.appendChild(core.h(`<h4>📍 Arrêts</h4>`));
-  if (!d.topo.arrets.length && !d.topo.lieux.length) cible.appendChild(core.h(`<p class="info-txt">Aucun arrêt — armez « ➕ Créer un arrêt » puis cliquez sur la carte.</p>`));
-  d.topo.arrets.forEach(a => {
-    const l = lieux.get(a.lieuId) || {};
-    const sansGps = (l.lat == null || l.lng == null);
-    cible.appendChild(itemObjet(core, t, {
-      id: a.id,
-      html: core.esc(a.nom) + ` <small>(${core.esc(a.abrev)})</small>` + (sansGps ? ' <span class="etiquette alerte">⚠ GPS</span>' : ""),
-      supprimable: true,
-      centrer: sansGps ? null : [l.lat, l.lng],
-      modifier: () => ficheArret(d, core, a.id),
-      supprimer: () => { Topo.supprimerArret(d, a.id); core.sauver(); core.rafraichir(); }
-    }));
-  });
+  /* ---------- 🚏 Lignes (pliable, filtre Groupes + recherche, fiche V1) ---------- */
+  const lignesVisibles = lignesAffichables(d, t).filter(l => cherche(l));
+  const deplieLignes = titreCategorie(cible, core, t, "lignes", "🚏 Lignes", lignesVisibles.length, dans(lignesAffichables(d, t).filter(l => cherche(l))));
+  if (deplieLignes) {
+    if (!d.lignes.length) cible.appendChild(core.h(`<p class="info-txt">Aucune ligne.</p>`));
+    else if (!lignesVisibles.length) cible.appendChild(core.h(`<p class="info-txt">Aucune ligne ne correspond${f.groupes.length ? " aux filtres" : ""}${q ? " à la recherche" : ""}.</p>`));
+    lignesVisibles.forEach(l => cible.appendChild(itemObjet(core, t, {
+      id: l.id, html: core.esc(l.abrev) + " — " + core.esc(l.nom), supprimable: false,
+      modifier: () => (typeof modalLigne === "function" ? modalLigne(l.id) : null)
+    })));
+  }
 
-  /* Lieux sans arrêt : fiche de lieu au double-clic, croix de suppression
-     (refusée si un arrêt venait à s'y rattacher — règle dans donnees.js). */
-  const utilises = new Set(d.topo.arrets.map(a => a.lieuId).filter(Boolean));
-  const libres = d.topo.lieux.filter(l => !utilises.has(l.id));
-  if (libres.length) {
-    cible.appendChild(core.h(`<h4>📍 Lieux sans arrêt</h4>`));
-    libres.forEach(l => {
+  /* ---------- 📍 Arrêts (pliable, GPS PROPRE à l'arrêt depuis la V2.4) ---------- */
+  const arretsVisibles = d.topo.arrets.filter(a => cherche(a));
+  const deplieArrets = titreCategorie(cible, core, t, "arrets", "📍 Arrêts", arretsVisibles.length, dans(d.topo.arrets.filter(a => cherche(a))));
+  if (deplieArrets) {
+    if (!d.topo.arrets.length && !d.topo.lieux.length) cible.appendChild(core.h(`<p class="info-txt">Aucun arrêt — armez « ➕ Créer un arrêt » puis cliquez sur la carte.</p>`));
+    else if (!arretsVisibles.length) cible.appendChild(core.h(`<p class="info-txt">Aucun arrêt ne correspond${q ? " à la recherche" : ""}.</p>`));
+    arretsVisibles.forEach(a => {
+      const sansGps = (a.lat == null || a.lng == null);
+      const l = lieux.get(a.lieuId) || {};
+      cible.appendChild(itemObjet(core, t, {
+        id: a.id,
+        html: core.esc(a.nom) + ` <small>(${core.esc(a.abrev)})</small>` + (l.nom ? ` <small>· ${core.esc(l.nom)}</small>` : "") + (sansGps ? ' <span class="etiquette alerte">⚠ GPS</span>' : ""),
+        supprimable: true,
+        centrer: sansGps ? null : [a.lat, a.lng],
+        modifier: () => ficheArret(d, core, a.id),
+        supprimer: () => { Topo.supprimerArret(d, a.id); core.sauver(); core.rafraichir(); }
+      }));
+    });
+  }
+
+  /* ---------- 🚉 Lieux (V2.4 : TOUS les lieux, pliables, carrés sur la
+     carte) — croix seulement si AUCUN arrêt n'y est rattaché (sinon la
+     règle métier refuserait de toute façon). ---------- */
+  const nbArretsParLieu = new Map();
+  d.topo.arrets.forEach(a => { if (a.lieuId) nbArretsParLieu.set(a.lieuId, (nbArretsParLieu.get(a.lieuId) || 0) + 1); });
+  const lieuxVisibles = d.topo.lieux.filter(l => cherche(l));
+  const deplieLieux = titreCategorie(cible, core, t, "lieux", "🚉 Lieux", lieuxVisibles.length, dans(d.topo.lieux.filter(l => cherche(l))));
+  if (deplieLieux) {
+    if (!d.topo.lieux.length) cible.appendChild(core.h(`<p class="info-txt">Aucun lieu — créez-en un dans l'onglet « 🚉 Lieux » ou via un arrêt.</p>`));
+    else if (!lieuxVisibles.length) cible.appendChild(core.h(`<p class="info-txt">Aucun lieu ne correspond${q ? " à la recherche" : ""}.</p>`));
+    lieuxVisibles.forEach(l => {
       const sansGps = (l.lat == null || l.lng == null);
+      const nb = nbArretsParLieu.get(l.id) || 0;
       cible.appendChild(itemObjet(core, t, {
         id: l.id,
-        html: core.esc(l.nom) + ` <small>(${core.esc(l.abrev)})</small>` + (sansGps ? ' <span class="etiquette alerte">⚠ GPS</span>' : ""),
-        supprimable: true,
+        html: core.esc(l.nom) + ` <small>(${core.esc(l.abrev)})</small>` + (l.caract ? ` <small>· ${core.esc(l.caract)}</small>` : "") + (sansGps ? ' <span class="etiquette alerte">⚠ GPS</span>' : "") + (nb ? ` <span class="etiquette">${nb} arrêt${nb > 1 ? "s" : ""}</span>` : ""),
+        supprimable: nb === 0,
         centrer: sansGps ? null : [l.lat, l.lng],
         modifier: () => ficheLieu(d, core, l.id),
         supprimer: () => { const r = Topo.supprimerLieu(d, l.id); if (!r.ok) alert((r.erreurs || []).join(" ")); core.sauver(); core.rafraichir(); }
@@ -358,9 +391,9 @@ function ficheArret(d, core, idArret) {
     <label>Nom <input id="e-nom" maxlength="64" required value="${core.esc(a.nom)}"></label>
     <label>Abréviation <input id="e-abrev" maxlength="8" required value="${core.esc(a.abrev)}"></label>
     <label>Lieu <select id="e-lieu">${lieuxOpts}</select></label>
-    <label>Latitude <input id="e-lat" type="number" step="any" value="${l.lat != null ? l.lat : ""}"></label>
-    <label>Longitude <input id="e-lng" type="number" step="any" value="${l.lng != null ? l.lng : ""}"></label>
-    <p class="info-txt">Les coordonnées sont celles du LIEU rattaché : les modifier déplace le lieu (et donc tous les arrêts qui s'y rattachent).</p>
+    <label>Latitude <input id="e-lat" type="number" step="any" value="${a.lat != null ? a.lat : ""}"></label>
+    <label>Longitude <input id="e-lng" type="number" step="any" value="${a.lng != null ? a.lng : ""}"></label>
+    <p class="info-txt">Les coordonnées sont celles de l'ARRÊT, indépendantes de son lieu (V2.4) : déplacer un arrêt ne déplace jamais le lieu.</p>
     <div class="actions"><button type="button" class="b-blanc" id="e-fermer">Annuler</button>
     <button type="submit" class="b-bleu">Enregistrer</button></div>
     <div id="e-erreurs"></div>
@@ -384,7 +417,13 @@ function ficheArret(d, core, idArret) {
   core.modal(f);
 }
 
-/* ----- FICHE DE MODIFICATION DE LIEU (V2.3, lieux sans arrêt) ----- */
+/* ----- FICHE DE MODIFICATION DE LIEU (V2.3 ; V2.4 : caractéristique) ----- */
+
+/* Suggestions de caractéristiques (cf. GTFS location_type : gare/station,
+   entrée, nœud générique…). Champ LIBRE : « Autre » laisse la main. */
+const LIEU_CARACTERISTIQUES = ["Gare", "Gare routière", "Passerelle", "Pôle d'échanges",
+  "Station de métro", "Arrêt de bus", "Terminus", "Dépôt", "Atelier",
+  "Stationnement (P+R)", "Entrée / sortie", "Nœud générique"];
 
 function ficheLieu(d, core, idLieu) {
   const l = d.topo.lieux.find(x => x.id === idLieu);
@@ -393,6 +432,8 @@ function ficheLieu(d, core, idLieu) {
     <h3>Modifier le lieu — ${core.esc(l.nom)}</h3>
     <label>Nom <input id="l-nom" maxlength="64" required value="${core.esc(l.nom)}"></label>
     <label>Abréviation <input id="l-abrev" maxlength="8" required value="${core.esc(l.abrev)}"></label>
+    <label>Caractéristique <input id="l-caract" list="l-caracts" maxlength="32" value="${core.esc(l.caract || "")}" placeholder="Gare, passerelle… (libre)"></label>
+    <datalist id="l-caracts">${LIEU_CARACTERISTIQUES.map(c => `<option value="${core.esc(c)}"></option>`).join("")}</datalist>
     <label>Latitude <input id="l-lat" type="number" step="any" value="${l.lat != null ? l.lat : ""}"></label>
     <label>Longitude <input id="l-lng" type="number" step="any" value="${l.lng != null ? l.lng : ""}"></label>
     <div class="actions"><button type="button" class="b-blanc" id="l-fermer">Annuler</button>
@@ -404,6 +445,7 @@ function ficheLieu(d, core, idLieu) {
     const r = Topo.modifierLieu(d, idLieu, {
       nom: f.querySelector("#l-nom").value,
       abrev: f.querySelector("#l-abrev").value,
+      caract: f.querySelector("#l-caract").value,
       lat: f.querySelector("#l-lat").value === "" ? null : Number(f.querySelector("#l-lat").value),
       lng: f.querySelector("#l-lng").value === "" ? null : Number(f.querySelector("#l-lng").value)
     });
@@ -414,6 +456,44 @@ function ficheLieu(d, core, idLieu) {
     }
   };
   f.querySelector("#l-fermer").onclick = () => f.closest(".modal-fond").remove();
+  core.modal(f);
+}
+
+/* ----- CRÉATION DE LIEU (V2.4 : onglet « 🚉 Lieux ») ----- */
+
+function formulaireLieu(d, core, lat, lng) {
+  const f = core.h(`<form class="panneau-travail">
+    <h3>Créer un lieu</h3>
+    <p class="info-txt">Un lieu est un point du réseau (gare, passerelle, pôle d'échanges…) auquel des arrêts peuvent se rattacher. Ses coordonnées lui appartiennent en propre.</p>
+    <label>Nom <input id="c-nom" maxlength="64" required placeholder="Ex. Gare de Rennes"></label>
+    <label>Abréviation <input id="c-abrev" maxlength="8" required placeholder="Ex. GAR"></label>
+    <label>Caractéristique <input id="c-caract" list="c-caracts" maxlength="32" placeholder="Gare, passerelle… (libre)"></label>
+    <datalist id="c-caracts">${LIEU_CARACTERISTIQUES.map(c => `<option value="${core.esc(c)}"></option>`).join("")}</datalist>
+    <label>Latitude <input id="c-lat" type="number" step="any" value="${lat != null ? lat : ""}" placeholder="Ex. 48.11"></label>
+    <label>Longitude <input id="c-lng" type="number" step="any" value="${lng != null ? lng : ""}" placeholder="Ex. -1.67"></label>
+    <div class="actions"><button type="button" class="b-blanc" id="c-fermer">Annuler</button>
+    <button type="submit" class="b-bleu">Créer le lieu</button></div>
+    <div id="c-erreurs"></div>
+  </form>`);
+  f.onsubmit = (ev) => {
+    ev.preventDefault();
+    const r = Topo.creerLieu(d, {
+      nom: f.querySelector("#c-nom").value,
+      abrev: f.querySelector("#c-abrev").value,
+      caract: f.querySelector("#c-caract").value,
+      lat: f.querySelector("#c-lat").value === "" ? null : Number(f.querySelector("#c-lat").value),
+      lng: f.querySelector("#c-lng").value === "" ? null : Number(f.querySelector("#c-lng").value)
+    });
+    if (r.ok) {
+      core.sauver();
+      f.closest(".modal-fond").remove();
+      core.rafraichir();
+    } else {
+      const zoneErr = f.querySelector("#c-erreurs");
+      zoneErr.replaceChildren(core.h(`<p class="erreur">${r.erreurs.map(e => core.esc(e)).join("<br>")}</p>`));
+    }
+  };
+  f.querySelector("#c-fermer").onclick = () => f.closest(".modal-fond").remove();
   core.modal(f);
 }
 
@@ -429,7 +509,7 @@ function popupReglages(d, core) {
     <label><input type="radio" name="r-fond" value="relief" ${r.fond === "relief" ? "checked" : ""}> Relief (OpenTopoMap)</label>
     <h4>Couches affichées</h4>
     <label><input type="checkbox" id="r-carrets" ${r.couches.arrets !== false ? "checked" : ""}> Arrêts</label>
-    <label><input type="checkbox" id="r-clieux" ${r.couches.lieux ? "checked" : ""}> Lieux (tous)</label>
+    <label><input type="checkbox" id="r-clieux" ${r.couches.lieux ? "checked" : ""}> Lieux (carrés, tous)</label>
     <h4>Étiquettes</h4>
     <label><input type="checkbox" id="r-etiq" ${r.etiquettes ? "checked" : ""}> Afficher le nom à côté des objets</label>
     <div class="actions"><button type="button" class="b-blanc" id="r-fermer">Fermer</button>
@@ -450,4 +530,5 @@ function popupReglages(d, core) {
   f.querySelector("#r-fermer").onclick = () => f.closest(".modal-fond").remove();
   core.modal(f);
 }
+
 

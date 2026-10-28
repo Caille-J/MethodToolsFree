@@ -13,8 +13,8 @@
    Chargé après vue.js (utilise formulaireArret et ficheArret). */
 "use strict";
 
-/* Colonnes du tableau des arrêts. "id" est FIXE. lat/lng viennent du
-   lieu rattaché (l'arrêt ne porte pas de GPS — cf. GTFS parent_station). */
+/* Colonnes du tableau des arrêts. "id" est FIXE. V2.4 : lat/lng sont
+   les coordonnées PROPRES de l'arrêt (indépendantes de son lieu). */
 const ARRET_COLONNES = [
   { cle: "id", label: "ID unique", fixe: true },
   { cle: "abrev", label: "Abrév." },
@@ -31,9 +31,9 @@ window.Topo.vueArrets = (d, core) => {
   const lieuDe = (a) => d.topo.lieux.find(l => l.id === a.lieuId) || {};
   const valCol = (a, cle) => {
     if (cle === "lieu") return lieuDe(a).nom || "—";
-    if (cle === "lat") { const l = lieuDe(a); return l.lat != null ? l.lat : ""; }
-    if (cle === "lng") { const l = lieuDe(a); return l.lng != null ? l.lng : ""; }
-    if (cle === "gps") { const l = lieuDe(a); return (l.lat != null && l.lng != null) ? "✓" : "⚠"; }
+    if (cle === "lat") return a.lat != null ? a.lat : "";
+    if (cle === "lng") return a.lng != null ? a.lng : "";
+    if (cle === "gps") return (a.lat != null && a.lng != null) ? "✓" : "⚠";
     if (cle === "id") return a.id;
     return a[cle] || "";
   };
@@ -163,7 +163,7 @@ window.Topo.vueArrets = (d, core) => {
   /* 📋 Copier (Excel) : TSV complet (toutes les colonnes utiles). */
   racine.querySelector("#ar-copy").onclick = () => {
     const tsv = ["Abrév\tNom\tLieu\tLatitude\tLongitude"].concat(
-      d.topo.arrets.map(a => [a.abrev, a.nom, lieuDe(a).nom || "", lieuDe(a).lat != null ? lieuDe(a).lat : "", lieuDe(a).lng != null ? lieuDe(a).lng : ""].join("\t"))
+      d.topo.arrets.map(a => [a.abrev, a.nom, lieuDe(a).nom || "", a.lat != null ? a.lat : "", a.lng != null ? a.lng : ""].join("\t"))
     ).join("\n");
     navigator.clipboard?.writeText(tsv);
     const info = core.h(`<div>
@@ -276,7 +276,7 @@ window.Topo.vueArrets = (d, core) => {
               }
             }
             const existant = d.topo.arrets.find(x => (x.abrev || "").toLowerCase() === abrev.toLowerCase());
-            if (existant) Topo.modifierArret(d, existant.id, { nom, abrev, lieuId: lieuId || existant.lieuId, lat, lng });
+            if (existant) { const m = { nom, abrev, lieuId: lieuId || existant.lieuId }; if (lat != null) m.lat = lat; if (lng != null) m.lng = lng; Topo.modifierArret(d, existant.id, m); }
             else Topo.creerArret(d, { nom, abrev, lat, lng, lieuId });
           });
         }
@@ -292,3 +292,188 @@ window.Topo.vueArrets = (d, core) => {
   return racine;
 };
 
+
+
+/* ================================================================
+   V2.4 — TABLEAU DES LIEUX (onglet « 🚉 Lieux », même ergonomie que
+   les arrêts : recherche, création, ✎/🗑, double-clic = fiche,
+   📋 Copier (Excel), 📥 Importer clé = abréviation du LIEU).
+   Colonnes FIXES (pas de ⚙ Colonnes pour garder la vue simple).
+   La CARACTÉRISTIQUE (gare, passerelle… cf. GTFS) est un champ libre
+   avec suggestions (datalist de vue.js).
+   ================================================================ */
+
+window.Topo.vueLieux = (d, core) => {
+  Topo.init(d);
+  if (!App.barreLieux) App.barreLieux = { q: "" };
+  const q = String(App.barreLieux.q || "").trim().toLowerCase();
+  const nbArretsParLieu = new Map();
+  d.topo.arrets.forEach(a => { if (a.lieuId) nbArretsParLieu.set(a.lieuId, (nbArretsParLieu.get(a.lieuId) || 0) + 1); });
+
+  /* Filtrage : recherche sur abréviation, nom et caractéristique. */
+  const visibles = d.topo.lieux.filter(l => {
+    if (!q) return true;
+    return ((l.abrev || "") + " " + (l.nom || "") + " " + (l.caract || "")).toLowerCase().includes(q);
+  });
+
+  const racine = core.h(`<div class="carte panneau-travail tableau-page">
+    <div class="barre-outils">
+      <div class="titre">Tableau de gestion des lieux</div>
+      <div class="actions">
+        <button id="li-copy">📋 Copier (Excel)</button>
+        <button id="li-masse">📥 Importer</button>
+      </div>
+    </div>
+    <div class="barre-filtres" style="grid-template-columns:2fr 1fr;">
+      <div class="champ"><label>Recherche</label>
+        <input id="li-q" value="${core.esc(App.barreLieux.q)}" placeholder="Abréviation, nom, caractéristique…"/></div>
+      <div class="champ"><label>&nbsp;</label>
+        <button id="li-nouv" class="b-bleu" style="width:100%;">+ Créer un lieu</button></div>
+    </div>
+    <div class="enveloppe-table"><table>
+      <thead><tr><th>ID unique</th><th>Abrév.</th><th>Nom</th><th>Caractéristique</th>
+      <th>Latitude</th><th>Longitude</th><th>Arrêts</th><th>GPS</th><th style="text-align:right;">Actions</th></tr></thead>
+      <tbody id="li-corps"></tbody>
+    </table></div>
+    <p class="info-txt" id="li-compte" style="margin-top:8px;"></p>
+  </div>`);
+
+  racine.querySelector("#li-q").oninput = (e) => {
+    App.barreLieux.q = e.target.value; core.rafraichir();
+    const cible = document.getElementById("li-q");
+    if (cible) { cible.focus(); cible.setSelectionRange(cible.value.length, cible.value.length); }
+  };
+  racine.querySelector("#li-nouv").onclick = () => formulaireLieu(d, core, null, null);
+
+  const corps = racine.querySelector("#li-corps");
+  corps.innerHTML = visibles.map(l =>
+    `<tr data-id="${core.esc(l.id)}">` +
+    `<td>${core.esc(l.id)}</td><td>${core.esc(l.abrev)}</td><td>${core.esc(l.nom)}</td>` +
+    `<td>${core.esc(l.caract || "")}</td>` +
+    `<td>${l.lat != null ? core.esc(String(l.lat)) : ""}</td><td>${l.lng != null ? core.esc(String(l.lng)) : ""}</td>` +
+    `<td>${nbArretsParLieu.get(l.id) || 0}</td>` +
+    `<td>${(l.lat != null && l.lng != null) ? "✓" : "⚠"}</td>` +
+    `<td style="text-align:right;"><button class="ico" data-act="mod" data-id="${core.esc(l.id)}" title="Modifier">✎</button><button class="ico suppr" data-act="sup" data-id="${core.esc(l.id)}" title="Supprimer (refusé si des arrêts sont rattachés)">🗑</button></td></tr>`
+  ).join("") + (!visibles.length
+    ? `<tr><td colspan="9" style="text-align:center;color:#64748b;">${d.topo.lieux.length ? "Aucun lieu ne correspond à la recherche." : "Aucun lieu — cliquez « + Créer un lieu »."}</td></tr>` : "");
+  corps.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-act]");
+    if (!b) return;
+    if (b.dataset.act === "mod") return ficheLieu(d, core, b.dataset.id);
+    if (b.classList.contains("armed")) {
+      const r = Topo.supprimerLieu(d, b.dataset.id);
+      if (!r.ok) alert((r.erreurs || []).join(" "));
+      core.sauver(); core.rafraichir(); return;
+    }
+    b.classList.add("armed"); b.textContent = "Confirmer ?";
+    setTimeout(() => { if (b.isConnected) { b.classList.remove("armed"); b.textContent = "🗑"; } }, 3000);
+  });
+  corps.addEventListener("dblclick", (e) => {
+    if (e.target.closest("button")) return;
+    const tr = e.target.closest("tr");
+    if (tr && tr.dataset.id) ficheLieu(d, core, tr.dataset.id);
+  });
+  racine.querySelector("#li-compte").textContent =
+    `${visibles.length} lieu(x) affiché(s) sur ${d.topo.lieux.length}` + (q ? ` — recherche « ${App.barreLieux.q} »` : "");
+
+  /* 📋 Copier (Excel) : TSV Abrév / Nom / Caractéristique / Latitude / Longitude. */
+  racine.querySelector("#li-copy").onclick = () => {
+    const tsv = ["Abrév\tNom\tCaractéristique\tLatitude\tLongitude"].concat(
+      d.topo.lieux.map(l => [l.abrev, l.nom, l.caract || "", l.lat != null ? l.lat : "", l.lng != null ? l.lng : ""].join("\t"))
+    ).join("\n");
+    navigator.clipboard?.writeText(tsv);
+    const info = core.h(`<div>
+      <h2>📋 Copié pour Excel</h2>
+      <p class="info-txt">Les ${d.topo.lieux.length} lieu(x) sont dans le presse-papiers : collez-les dans Excel avec Ctrl+V.</p>
+      <div class="ligne-boutons"><button id="lc-ok" class="b-bleu">Fermer</button></div>
+    </div>`);
+    info.querySelector("#lc-ok").onclick = () => info.closest(".modal-fond").remove();
+    core.modal(info);
+  };
+
+  /* 📥 Importer : fichier ou collage, clé = abréviation du LIEU.
+     Colonnes : Abrév*, Nom*, Caractéristique, Latitude, Longitude.
+     - lieu existant → mise à jour (caractéristique et coordonnées si fournies) ;
+     - nouveau → création. Le lieu n'est JAMAIS supprimé par un import. */
+  racine.querySelector("#li-masse").onclick = () => {
+    const form = core.h(`<form class="panneau-travail">
+      <h2>Importer des lieux</h2>
+      <p class="info-txt">Colonnes : <b>Abrév* — Nom* — Caractéristique — Latitude — Longitude</b> (* = obligatoire).
+      La clé est l'abréviation : un lieu existant est mis à jour, un nouveau est créé.</p>
+      <p class="info-txt">Formats acceptés : collage TSV (copié d'Excel), CSV (; ou ,), 5 colonnes.</p>
+      <label><input type="file" id="li-fichier" accept=".csv,.tsv,.txt"></label>
+      <label>ou collez ici :<br><textarea id="li-texte" rows="6" style="width:100%;" placeholder="GAR&#9;Gare de Rennes&#9;Gare&#9;48.11&#9;-1.67"></textarea></label>
+      <div class="ligne-boutons"><button type="button" id="li-ann" class="b-blanc">Annuler</button>
+      <button type="submit" class="b-bleu">Prévisualiser</button></div>
+      <div id="li-erreurs"></div>
+    </form>`);
+    form.querySelector("#li-ann").onclick = () => form.closest(".modal-fond").remove();
+    form.onsubmit = (ev) => {
+      ev.preventDefault();
+      const fichier = form.querySelector("#li-fichier").files[0];
+      const texte = fichier ? null : form.querySelector("#li-texte").value;
+      if (!fichier && !texte) {
+        form.querySelector("#li-erreurs").replaceChildren(core.h(`<p class="erreur">Choisissez un fichier ou collez des lignes.</p>`));
+        return;
+      }
+      if (!fichier) return preparer(texte);
+      const fr = new FileReader();
+      fr.onload = () => preparer(String(fr.result || ""));
+      fr.readAsText(fichier);
+    };
+    function preparer(texte) {
+      /* Prévisualisation sur une COPIE des données (jamais sur les vraies). */
+      const copie = JSON.parse(JSON.stringify(d));
+      const lignesTxt = texte.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+      let crees = 0, maj = 0, ignorees = 0;
+      lignesTxt.forEach(ligneTxt => {
+        const c = ligneTxt.split(/\t|;|,(?=\s*-?\d|\s*[A-ZÀ-Ü])/).map(x => (x || "").trim());
+        if (c.length < 2) { ignorees++; return; }
+        const abrev = c[0], nom = c[1];
+        const caract = c[2] || "";
+        const lat = c[3] === undefined || c[3] === "" ? null : Number(c[3]);
+        const lng = c[4] === undefined || c[4] === "" ? null : Number(c[4]);
+        if (!abrev || !nom || (lat != null && isNaN(lat)) || (lng != null && isNaN(lng))) { ignorees++; return; }
+        const existant = copie.topo.lieux.find(x => (x.abrev || "").toLowerCase() === abrev.toLowerCase());
+        if (existant) {
+          Topo.modifierLieu(copie, existant.id, Object.assign({ nom, abrev, caract }, lat != null ? { lat } : {}, lng != null ? { lng } : {}));
+          maj++;
+        } else {
+          const r = Topo.creerLieu(copie, { nom, abrev, caract, lat, lng });
+          if (r.ok) crees++; else ignorees++;
+        }
+      });
+      const apercu = core.h(`<div class="panneau-travail">
+        <h2>📥 Prévisualisation de l'import</h2>
+        <p class="info-txt">${crees} création(s), ${maj} mise(s) à jour, ${ignorees} ignorée(s) — sur ${lignesTxt.length} ligne(s) lue(s).</p>
+        <div class="ligne-boutons"><button id="li-retour" class="b-blanc">✕ Annuler</button>
+        <button id="li-ok" class="b-vert" ${crees + maj === 0 ? "disabled" : ""}>Importer ${crees + maj} lieu(x)</button></div>
+      </div>`);
+      apercu.querySelector("#li-retour").onclick = () => apercu.closest(".modal-fond").remove();
+      apercu.querySelector("#li-ok").onclick = () => {
+        /* On REJOUE le même texte sur les VRAIES données : aucune divergence
+           possible entre l'aperçu et l'effet réel (motif rodé des arrêts). */
+        lignesTxt.forEach(ligneTxt => {
+          const c = ligneTxt.split(/\t|;|,(?=\s*-?\d|\s*[A-ZÀ-Ü])/).map(x => (x || "").trim());
+          if (c.length < 2) return;
+          const abrev = c[0], nom = c[1];
+          const caract = c[2] || "";
+          const lat = c[3] === undefined || c[3] === "" ? null : Number(c[3]);
+          const lng = c[4] === undefined || c[4] === "" ? null : Number(c[4]);
+          if (!abrev || !nom || (lat != null && isNaN(lat)) || (lng != null && isNaN(lng))) return;
+          const existant = d.topo.lieux.find(x => (x.abrev || "").toLowerCase() === abrev.toLowerCase());
+          if (existant) Topo.modifierLieu(d, existant.id, Object.assign({ nom, abrev, caract }, lat != null ? { lat } : {}, lng != null ? { lng } : {}));
+          else Topo.creerLieu(d, { nom, abrev, caract, lat, lng });
+        });
+        core.sauver();
+        apercu.closest(".modal-fond").remove();
+        form.closest(".modal-fond").remove();
+        core.rafraichir();
+        alert(`Import terminé : ${crees} création(s), ${maj} mise(s) à jour, ${ignorees} ignorée(s).`);
+      };
+      core.modal(apercu);
+    }
+  };
+
+  return racine;
+};
